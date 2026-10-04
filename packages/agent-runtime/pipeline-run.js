@@ -8,7 +8,7 @@ const {
 } = require("./capability");
 const { buildModelContext } = require("./pipeline-context");
 const { instructionsForMode } = require("./pipeline-instructions");
-const { runPipeline } = require("./pipeline-loop");
+const { runAgentLoop } = require("./agent-loop");
 const {
   addRequirement: brainAddRequirement,
   addDecision: brainAddDecision,
@@ -673,7 +673,7 @@ async function executePipelineRun(run, options, followUpQueue) {
   const verify = await createVerifier(run, { registry, workspace, callTool });
   let currentModelTurn = 0;
 
-  const result = await runPipeline({
+  const result = await runAgentLoop({
     provider,
     model: run.effectiveModel,
     messages: context.messages,
