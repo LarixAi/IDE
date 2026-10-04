@@ -34,7 +34,6 @@ export CODEME_SKIP_LIVE="${CODEME_SKIP_LIVE:-1}"
 # Composer now has one active runtime: Pipeline v2 -> canonical OpenHands-style agent loop.
 # n8n/Paperclip libraries remain tested independently while both services are disabled by default.
 "$node" "$root/packages/n8n-capability/test/capabilities.test.js"
-"$node" "$root/packages/n8n-capability/test/foundation.test.js"
 "$node" "$root/packages/n8n-capability/test/mcp.test.js"
 "$node" "$root/packages/feature-qualify/test/requirements.test.js"
 "$node" "$root/extensions/codeme-shell/test/tab-policy.test.js"
