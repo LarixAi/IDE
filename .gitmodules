@@ -2,3 +2,8 @@
 	path = code-oss
 	url = https://github.com/microsoft/vscode.git
 	shallow = true
+
+[submodule "vendor/langchain-context-engineering"]
+	path = vendor/langchain-context-engineering
+	url = https://github.com/langchain-ai/context_engineering.git
+	shallow = true
