@@ -26,6 +26,7 @@ const { UniversalMcpRegistry } = require("./universal-mcp");
 const { loadProjectBrain, brainPath } = require("../../packages/agent-runtime/project-brain-store");
 const { loadSkills } = require("../../packages/agent-runtime/skills");
 const { TerminalObserver } = require("./terminal-observer");
+const { ResearchEngineerProvider } = require("./research-engineer");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -1021,7 +1022,11 @@ class ComposerViewProvider {
       : null;
     this.n8n = new N8nIntegration(context);
     this.terminalObserver = new TerminalObserver(vscode).start();
-    this.externalTools = new UniversalMcpRegistry(context, this.n8n, [this.terminalObserver]);
+    this.researchEngineer = new ResearchEngineerProvider();
+    this.externalTools = new UniversalMcpRegistry(context, this.n8n, [
+      this.terminalObserver,
+      this.researchEngineer,
+    ]);
     this.syncExternalPermissions();
     this.session = new ComposerSession({
       store: new RunStore(path.join(context.globalStorageUri.fsPath, "composer-runs")),
