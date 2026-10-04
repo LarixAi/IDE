@@ -130,6 +130,7 @@ function checkpointState(input = {}) {
     toolCallCount: Number(input.toolCallCount || 0),
     repairs: Number(input.repairs || 0),
     finalText: String(input.finalText || ""),
+    agentEvents: (input.agentEvents || []).map((event) => ({ ...event })),
     savedAt: Date.now(),
   };
 }
