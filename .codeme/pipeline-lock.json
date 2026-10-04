@@ -1,21 +1,20 @@
 {
-  "version": 2,
-  "name": "CodeMe Pipeline v2 Canonical Lock",
-  "baselineCommit": "c1cba678338f4c1b61f271c81492e42e8318eb72",
-  "baselineBranch": "codeme/openhands-step-loop-v1",
+  "version": 6,
+  "name": "CodeMe OpenHands Agent Loop Canonical Lock",
+  "baselineCommit": "bae100d69349abda41078a0b70b2e2437f105ef9",
+  "baselineBranch": "codeme/openhands-only-loop",
   "lockedAt": "2026-10-04",
   "policy": {
     "owner": "LarixAi",
-    "rule": "Do not modify protected pipeline files or update this manifest unless the repository owner has explicitly approved a pipeline change.",
+    "rule": "Do not add a second executable agent loop, legacy routing switch, or protected-pipeline change unless the repository owner explicitly approves it.",
     "addons": "New features should integrate through external tools, capabilities, providers, UI modules, or other extension points without changing the protected pipeline core.",
-    "approvedChange": "Owner-approved OpenHands-style event-step model loop port; existing protected-file changes already present on IDE/main are incorporated into the refreshed baseline."
+    "approvedChange": "Owner-approved OpenHands-only loop cutover with repository-wide legacy-loop regression guard."
   },
   "protectedFiles": {
-    "packages/agent-runtime/pipeline-run.js": "55a7ff9a7d8bd959714b653ffc99784d9c8a602b",
+    "packages/agent-runtime/pipeline-run.js": "1b39fceaf563433300287bb55387840eb08f4b6a",
     "packages/agent-runtime/pipeline-loop.js": "4e7ebea2e736657cf500242ddd60424abfea5049",
     "packages/agent-runtime/pipeline-context.js": "79c906348f6f50b1e416ca3cad0223803ff021ab",
     "packages/agent-runtime/pipeline-instructions.js": "472de57e802ab3e0066bf4ad2356f209fd57bbf8",
-    "packages/agent-runtime/agent-run.js": "d73a0500e3be91f055e462c1203ea4957db608ec",
     "packages/agent-runtime/model-provider.js": "d6991d5285f07698878c7441b88cead48b65b6a7",
     "packages/agent-runtime/tool-registry.js": "8f86e4cab60cf3417261c0ffb02cd2f4ce1987ba",
     "packages/agent-runtime/capability.js": "3fd1f96f6b0a8e26e8a49fbdc7241dfea50e269c",
@@ -23,9 +22,12 @@
     "packages/agent-runtime/strategy.js": "cc9eaa7a197d43c8dc9d0f88f9923fc43ebda4c9",
     "packages/agent-runtime/intent.js": "e78006ef754dc3a3e80eeb48a0975eadc4eae74f",
     "packages/agent-runtime/project-decision.js": "85a493becad2e193f19c09fd42420c28f945a9e6",
-    "extensions/codeme-shell/composer-session.js": "2d4bb1b7551179973b35c070debcd96ca1fd6c0f",
+    "extensions/codeme-shell/composer-session.js": "c9a4b325586d5f8fa9c9e9eb18498685a7be17e6",
     "packages/agent-runtime/test/pipeline-v2.test.js": "48f9a48ff98d236803c9729a380583e294f8f06d",
-    "extensions/codeme-shell/test/composer-pipeline-v2.test.js": "71f6062c045cb84fc5d1af7c2e3fbe36422c8ab1"
+    "extensions/codeme-shell/test/composer-pipeline-v2.test.js": "71f6062c045cb84fc5d1af7c2e3fbe36422c8ab1",
+    "packages/agent-runtime/run-state.js": "3afcaaa2a0595fbdf11830cd14ac45a9f3236fe0",
+    "packages/agent-runtime/capability-preflight.js": "a781cc0ade2065034369765c2c566ea1ddcd8a26",
+    "packages/agent-runtime/test/single-loop-contract.test.js": "08048ff03b84f5ed0fec64b9fc6f4f54ad75ea37"
   },
   "extensionPoints": [
     "packages/n8n-capability/**",
@@ -41,6 +43,18 @@
       "change": "OpenHands-style stateless event-step reasoning/action loop architecture",
       "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
       "branch": "codeme/openhands-step-loop-v1"
+    },
+    {
+      "date": "2026-10-04",
+      "change": "Removed legacy agent-run executor and CODEME_AGENT_PIPELINE fallback; OpenHands-style event-step pipeline is canonical and exclusive.",
+      "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
+      "branch": "codeme/openhands-only-loop"
+    },
+    {
+      "date": "2026-10-04",
+      "change": "Moved capability research/memory/decomposition preflight into the canonical OpenHands pipeline so legacy routing is not required.",
+      "source": "CodeMe canonical OpenHands loop",
+      "branch": "codeme/openhands-only-loop"
     }
   ]
 }

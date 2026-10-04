@@ -2,7 +2,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { ModelProvider, RunStore, startAgentRun } = require("..");
+const { ModelProvider, RunStore, startPipelineRun } = require("..");
 const { resolveRuleDecision } = require("../rule-decision");
 
 class CaptureModel extends ModelProvider {
@@ -65,7 +65,7 @@ async function runChatContract() {
   const registry = new FakeRegistry();
   const model = new CaptureModel([{ text: "Hello from chat.", toolCalls: [] }]);
 
-  const run = await startAgentRun({
+  const run = await startPipelineRun({
     goal: "Read server.js and tell me what it does. Do not change anything.",
     model: "fixture",
     providerName: "capture",
@@ -94,7 +94,7 @@ async function runAskContract() {
   const registry = new FakeRegistry();
   const model = new CaptureModel([{ text: "The project contains a JavaScript package.", toolCalls: [] }]);
 
-  const run = await startAgentRun({
+  const run = await startPipelineRun({
     goal: "What kind of project is this?",
     model: "fixture",
     providerName: "capture",
@@ -113,7 +113,7 @@ async function runAskContract() {
   assert.ok(offered.has("dir.list"));
   assert.ok(!offered.has("file.write"));
   assert.ok(!offered.has("terminal.run"));
-  assert.ok(!offered.has("browser.check"));
+  assert.ok(offered.has("browser.check"), "Read-only browser verification may remain available in Ask/Plan");
 }
 
 async function runPlanContract() {
@@ -125,7 +125,7 @@ async function runPlanContract() {
     { text: "1. Read the relevant files.\n2. Update the implementation in Code mode.\n3. Run verification and review the diff.", toolCalls: [] },
   ]);
 
-  const run = await startAgentRun({
+  const run = await startPipelineRun({
     goal: "Plan how to improve this project.",
     model: "fixture",
     providerName: "capture",
@@ -144,7 +144,7 @@ async function runPlanContract() {
   const offered = new Set(model.calls[0].tools);
   assert.ok(!offered.has("file.write"));
   assert.ok(!offered.has("terminal.run"));
-  assert.ok(!offered.has("browser.check"));
+  assert.ok(offered.has("browser.check"), "Read-only browser verification may remain available in Ask/Plan");
   assert.strictEqual(run.filesChanged.length, 0);
 }
 

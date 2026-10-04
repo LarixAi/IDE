@@ -2,7 +2,8 @@ const { ModelProvider, OllamaModelProvider } = require("./model-provider");
 const { ToolProvider, ReadOnlyToolProvider, ControlledToolProvider, ToolRegistry } = require("./tool-registry");
 const { ExternalCapabilityProvider, CapabilityRegistry } = require("./capability");
 const { RunStore } = require("./run-store");
-const { createRun, startAgentRun, resumeRun, applyFollowUp } = require("./agent-run");
+const { createRun } = require("./run-state");
+const { applyFollowUp } = require("./requirements");
 const { startPipelineRun, resumePipelineRun } = require("./pipeline-run");
 const { lockModel } = require("./model-lock");
 const { classifyTask, selectStrategy } = require("./strategy");
@@ -26,10 +27,8 @@ module.exports = {
   CapabilityRegistry,
   RunStore,
   createRun,
-  startAgentRun,
   startPipelineRun,
   resumePipelineRun,
-  resumeRun,
   applyFollowUp,
   lockModel,
   classifyTask,

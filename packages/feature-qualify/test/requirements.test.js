@@ -1,8 +1,16 @@
-const assert = require("assert");
+"use strict";
+
+const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { ModelProvider, RunStore, startAgentRun, ControlledToolProvider, ToolRegistry } = require("../../agent-runtime");
+const {
+  ModelProvider,
+  RunStore,
+  startPipelineRun,
+  ControlledToolProvider,
+  ToolRegistry,
+} = require("../../agent-runtime");
 const { createWorkspaceHost } = require("../../coding-qualify/host");
 const { REQUIREMENTS } = require("../acceptance");
 const { executeControlled } = require("../../agent-tools");
@@ -14,11 +22,45 @@ class ScriptedModelProvider extends ModelProvider {
     this.calls = 0;
   }
 
-  async complete(input) {
+  async complete() {
     this.calls += 1;
-    const step = this.steps.shift();
-    return { text: step.text || "", toolCalls: step.toolCalls || [] };
+    return this.steps.shift() || { text: "Done.", toolCalls: [] };
   }
+}
+
+function simpleHost(root) {
+  return {
+    async inspectWorkspace() {
+      return {
+        state: "project",
+        root,
+        entries: fs.readdirSync(root).length,
+        git: false,
+        projectMarkers: [],
+        languages: [],
+        frameworks: [],
+        packageManager: null,
+        scripts: {},
+      };
+    },
+    async listDirectory() {
+      return {
+        path: ".",
+        entries: fs.readdirSync(root).map((name) => ({ path: name, type: "file" })),
+      };
+    },
+    async readFile(filePath) {
+      return { path: filePath, contents: fs.readFileSync(path.join(root, filePath), "utf8") };
+    },
+    async writeFile(filePath, contents) {
+      fs.writeFileSync(path.join(root, filePath), contents);
+      return { path: filePath, bytes: Buffer.byteLength(contents) };
+    },
+    async search() { return { query: "", matches: [] }; },
+    async gitStatus() { return { branch: "main", changes: [] }; },
+    async gitDiff() { return { diff: "" }; },
+    async diagnostics() { return { items: [] }; },
+  };
 }
 
 async function test(name, fn) {
@@ -33,35 +75,44 @@ async function test(name, fn) {
 }
 
 async function main() {
-  await test("an unverified requirement blocks completion", async () => {
-    const store = new RunStore(fs.mkdtempSync(path.join(os.tmpdir(), "codeme-feature-")));
-    const provider = new ScriptedModelProvider([{ text: "done" }, { text: "done" }]);
-    let checks = 0;
-    const run = await startAgentRun({
+  await test("an unanswered edit requirement triggers canonical verify-repair before completion", async () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-feature-"));
+    fs.writeFileSync(path.join(workspace, "README.md"), "fixture\n");
+    const provider = new ScriptedModelProvider([
+      { text: "Done.", toolCalls: [] },
+      {
+        text: "Applying the missing implementation.",
+        toolCalls: [{ name: "file.write", args: { path: "registration.txt", contents: "registration enabled\n" } }],
+      },
+      { text: "Registration has been added.", toolCalls: [] },
+    ]);
+
+    const run = await startPipelineRun({
       goal: "Add registration",
       model: "scripted",
       providerName: "scripted",
       mode: "controlled",
+      composerMode: "code",
       requirements: REQUIREMENTS,
       provider,
-      registry: new ToolRegistry(new ControlledToolProvider({ async readFile() { return { contents: "" }; } })),
-      store,
-      verify(runState) {
-        checks += 1;
-        if (checks > 1) {
-          for (const item of runState.requirements) item.status = "satisfied";
-        }
-        return { status: "passed", summary: "claimed", evidence: [] };
-      },
+      registry: new ToolRegistry(new ControlledToolProvider(simpleHost(workspace))),
+      store: new RunStore(path.join(workspace, ".runs")),
+      maxIterations: 5,
+      maxRepairRounds: 2,
+      projectBrainEnabled: false,
+      skillsEnabled: false,
     }).done;
-    assert.strictEqual(run.lifecycle, "completed");
-    assert.strictEqual(provider.calls, 2);
-    assert.strictEqual(run.verificationHistory[0].status, "failed");
-    assert.ok(run.verificationHistory[0].summary.includes("registration-endpoint"));
-    assert.ok(run.requirements.every((item) => item.status === "satisfied"));
+
+    assert.strictEqual(run.lifecycle, "completed", JSON.stringify({ error: run.error, verification: run.verification }, null, 2));
+    assert.ok(run.verificationHistory.some((item) => item.status === "failed"), "first prose-only answer must fail verification");
+    assert.strictEqual(run.verification.status, "passed");
+    assert.ok(run.toolCalls.some((call) => call.name === "file.write" && call.result && call.result.ok));
+    assert.strictEqual(fs.readFileSync(path.join(workspace, "registration.txt"), "utf8"), "registration enabled\n");
+    assert.ok(run.requirements.every((item) => item.status === "verified"));
+    assert.strictEqual(provider.calls, 3);
   });
 
-  await test("the fixture suite fails before the feature exists", async () => {
+  await test("the fixture suite fails before the feature exists and path escape is still blocked", async () => {
     const parent = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-feature-app-"));
     const workspace = path.join(parent, "fixture");
     fs.cpSync(path.join(__dirname, "../fixture"), workspace, { recursive: true });
@@ -73,10 +124,10 @@ async function main() {
     assert.strictEqual(escaped.error.code, "path_escape");
   });
 
-  if (process.exitCode) process.exit(process.exitCode);
+  console.log("ok requirements qualification uses canonical OpenHands loop");
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });

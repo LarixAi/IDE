@@ -1,4 +1,4 @@
-# OpenHands-style Agent Loop Port
+# Canonical OpenHands-style Agent Loop
 
 Source architecture reviewed: https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx
 
@@ -52,3 +52,12 @@ The condenser is deterministic and does not call a second model. It keeps the sy
 ## Pipeline lock
 
 This is an owner-approved Pipeline v2 change. The protected-file hashes were refreshed after the loop port so `scripts/check-pipeline-lock.js` continues to guard the approved baseline.
+
+
+## Single-loop policy
+
+CodeMe now has one executable agent loop only: `startPipelineRun()` / `resumePipelineRun()`, backed by the OpenHands-style event-step architecture.
+
+The previous legacy `agent-run.js` executor and its runtime switch have been removed. `CODEME_AGENT_PIPELINE=legacy` is no longer supported. Composer cannot route to another agent loop.
+
+Shared run-state construction lives in `packages/agent-runtime/run-state.js`; it is not a second loop. All model reasoning, tool actions, observations, context condensation, checkpoint resume, and completion verification flow through the canonical OpenHands-style pipeline.
