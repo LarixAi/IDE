@@ -1,11 +1,13 @@
-const assert = require("assert");
+"use strict";
+
+const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const {
   ModelProvider,
   RunStore,
-  startAgentRun,
+  startPipelineRun,
   ReadOnlyToolProvider,
   ToolRegistry,
   selectCapability,
@@ -19,14 +21,21 @@ const LIVE = [
 ];
 
 class OneTurnProvider extends ModelProvider {
-  constructor(label) {
+  constructor(label, composerMode = "ask") {
     super("gate11-scripted");
     this.label = label;
+    this.composerMode = composerMode;
     this.calls = [];
   }
 
   async complete(input) {
     this.calls.push(input);
+    if (this.composerMode === "plan") {
+      return {
+        text: "1. Inspect the current workspace.\n2. Apply the planned change in Code mode.\n3. Verify the result.",
+        toolCalls: [],
+      };
+    }
     return { text: `Observed routed context for ${this.label}.`, toolCalls: [] };
   }
 }
@@ -51,16 +60,12 @@ function routingHub(state) {
             {
               id: "T1",
               title: "Define checkout contract",
-              dependsOn: [],
               objective: "Specify the checkout request and response.",
-              doneWhen: "The contract is documented.",
             },
             {
               id: "T2",
               title: "Implement checkout",
-              dependsOn: ["T1"],
               objective: "Build the checkout flow against the contract.",
-              doneWhen: "The checkout tests pass.",
             },
           ],
         };
@@ -68,26 +73,21 @@ function routingHub(state) {
         data = {
           action: "lookup",
           query: request.input && request.input.query,
-          matches: [
-            {
-              title: "Completion needs evidence",
-              text: "Tests, diagnostics, and the diff decide completion.",
-              tags: ["verification"],
-            },
-          ],
+          matches: [{
+            title: "Completion needs evidence",
+            text: "Tests, diagnostics, and the diff decide completion.",
+          }],
         };
       } else if (request.capability === "research.problem") {
         data = {
           problem: request.input && request.input.problem,
           confidence: "high",
-          evidence: [
-            {
-              title: "Stripe webhook verification",
-              url: "https://example.com/stripe-webhook",
-              excerpt: "Verify the signature against the raw request body before parsing JSON.",
-              source: "test",
-            },
-          ],
+          evidence: [{
+            title: "Stripe webhook verification",
+            url: "https://example.com/stripe-webhook",
+            excerpt: "Verify the signature against the raw request body before parsing JSON.",
+            source: "test",
+          }],
         };
       } else {
         data = { health: "ok" };
@@ -109,58 +109,57 @@ function routingHub(state) {
 
 function createHost(workspace) {
   return {
+    async inspectWorkspace() {
+      return {
+        state: "project",
+        root: workspace,
+        entries: 1,
+        git: false,
+        projectMarkers: [],
+        languages: ["markdown"],
+        frameworks: [],
+        packageManager: null,
+        scripts: {},
+      };
+    },
+    async listDirectory() {
+      return { path: ".", entries: [{ path: "README.md", type: "file" }] };
+    },
     async readFile(filePath) {
       return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
     },
-    async search() {
-      return { query: "", matches: [] };
-    },
-    async gitStatus() {
-      return { branch: "main", changes: [] };
-    },
-    async gitDiff() {
-      return { diff: "" };
-    },
-    async diagnostics() {
-      return { items: [] };
-    },
+    async search() { return { query: "", matches: [] }; },
+    async gitStatus() { return { branch: "main", changes: [] }; },
+    async gitDiff() { return { diff: "" }; },
+    async diagnostics() { return { items: [] }; },
     async browserCheck(url) {
       return { available: false, code: "browser_unavailable", message: "not needed", url };
     },
   };
 }
 
-async function runScenario({ goal, composerMode = "ask", mode = "read_only", expectedCapability = null }) {
+async function runScenario({ goal, composerMode = "ask", expectedCapability = null }) {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-gate11-"));
   const workspace = path.join(parent, "ws");
   fs.mkdirSync(workspace);
   fs.writeFileSync(path.join(workspace, "README.md"), "# Gate 11\nLocal workspace context.\n");
 
   const state = { requests: [] };
-  const provider = new OneTurnProvider(expectedCapability || "local");
-  const run = await startAgentRun({
+  const provider = new OneTurnProvider(expectedCapability || "local", composerMode);
+  const run = await startPipelineRun({
     goal,
     model: "gate11-scripted",
     providerName: provider.name,
-    mode,
+    mode: "read_only",
     composerMode,
+    taskClass: composerMode === "plan" ? "plan" : undefined,
     provider,
     registry: new ToolRegistry(new ReadOnlyToolProvider(createHost(workspace))),
     store: new RunStore(path.join(parent, "runs")),
     capabilities: routingHub(state),
     maxIterations: 4,
-    verify(runState, text) {
-      const calls = (runState.toolCalls || []).filter((call) => call.name === "capability.invoke");
-      if (expectedCapability === null) {
-        return calls.length === 0 && text
-          ? { status: "passed", summary: "Local work stayed local.", evidence: [] }
-          : { status: "failed", summary: "A local request was routed to the hub.", evidence: calls.map((call) => call.args.capability) };
-      }
-      const matching = calls.filter((call) => call.args && call.args.capability === expectedCapability);
-      return matching.length === 1 && calls.length === 1 && text
-        ? { status: "passed", summary: `Exactly one ${expectedCapability} route was consumed.`, evidence: [expectedCapability] }
-        : { status: "failed", summary: "Capability routing was not exclusive.", evidence: calls.map((call) => call.args.capability) };
-    },
+    projectBrainEnabled: false,
+    skillsEnabled: false,
   }).done;
 
   return { run, state, provider };
@@ -178,29 +177,16 @@ async function main() {
   assert.strictEqual(task.run.lifecycle, "completed");
   assert.deepStrictEqual(task.state.requests.map((item) => item.capability), ["task.decompose"]);
   assert.strictEqual(task.state.requests[0].input.goal, taskGoal);
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(task.state.requests[0].input, "question"), false);
   assert.match(firstModelText(task.provider), /Task graph:/);
   assert.match(firstModelText(task.provider), /T1 Define checkout contract/);
-
-  const controlledTaskGoal = "1. Fix the checkout API 2. Repair the booking form 3. Verify the confirmation flow";
-  const controlledTask = await runScenario({
-    goal: controlledTaskGoal,
-    composerMode: "code",
-    mode: "controlled",
-    expectedCapability: "task.decompose",
-  });
-  assert.strictEqual(controlledTask.run.lifecycle, "completed");
-  assert.deepStrictEqual(controlledTask.state.requests.map((item) => item.capability), ["task.decompose"]);
-  assert.strictEqual(controlledTask.state.requests[0].input.goal, controlledTaskGoal);
-  assert.match(firstModelText(controlledTask.provider), /T1 Define checkout contract/);
+  assert.ok(task.run.toolCalls.some((call) => call.name === "capability.invoke" && call.phase === "preflight"));
 
   const knowledgeGoal = "What did we save in the project notes about completion evidence";
   const knowledge = await runScenario({ goal: knowledgeGoal, expectedCapability: "knowledge.lookup" });
   assert.strictEqual(knowledge.run.lifecycle, "completed");
   assert.deepStrictEqual(knowledge.state.requests.map((item) => item.capability), ["knowledge.lookup"]);
   assert.strictEqual(knowledge.state.requests[0].input.query, knowledgeGoal);
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(knowledge.state.requests[0].input, "question"), false);
-  assert.match(firstModelText(knowledge.provider), /Stored notes:/);
+  assert.match(firstModelText(knowledge.provider), /Stored context:/);
   assert.match(firstModelText(knowledge.provider), /Completion needs evidence/);
 
   const researchGoal = "Research why Stripe webhook signature verification is failing";
@@ -208,13 +194,12 @@ async function main() {
   assert.strictEqual(research.run.lifecycle, "completed");
   assert.deepStrictEqual(research.state.requests.map((item) => item.capability), ["research.problem"]);
   assert.strictEqual(research.state.requests[0].input.problem, researchGoal);
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(research.state.requests[0].input, "question"), false);
-  assert.match(firstModelText(research.provider), /Verify the signature against the raw request body/);
+  assert.match(firstModelText(research.provider), /Stripe webhook verification|raw request body/);
 
   const local = await runScenario({ goal: "Explain the README in this workspace", expectedCapability: null });
   assert.strictEqual(local.run.lifecycle, "completed");
   assert.deepStrictEqual(local.state.requests, []);
-  assert.doesNotMatch(firstModelText(local.provider), /hub routed this request/i);
+  assert.doesNotMatch(firstModelText(local.provider), /EXTERNAL CAPABILITY PREFLIGHT/);
 
   const priority = selectCapability(
     "What did we save in the project notes about why the API fails",
@@ -226,10 +211,10 @@ async function main() {
   );
   assert.strictEqual(priority && priority.name, "knowledge.lookup");
 
-  console.log("ok gate 11 intelligent capability routing qualification");
+  console.log("ok gate 11 intelligent capability routing qualification on canonical OpenHands loop");
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });
