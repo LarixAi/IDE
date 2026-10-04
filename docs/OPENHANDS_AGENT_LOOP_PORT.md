@@ -52,3 +52,12 @@ The condenser is deterministic and does not call a second model. It keeps the sy
 ## Pipeline lock
 
 This is an owner-approved Pipeline v2 change. The protected-file hashes were refreshed after the loop port so `scripts/check-pipeline-lock.js` continues to guard the approved baseline.
+
+## Canonical loop cutover
+
+As of 2026-10-04, `packages/agent-runtime/agent-loop.js` is the only production model/agent loop implementation.
+
+- `pipeline-run.js` invokes `runAgentLoop()` directly.
+- `pipeline-loop.js` is a compatibility shim that re-exports the canonical loop; it contains no loop logic.
+- Existing CodeMe mode guards, recovery, checkpoints, tools, Project Brain, n8n capability access, Paperclip integration and verification remain surrounding services.
+- This preserves current behavior while preventing two independent reasoning/action loops from diverging.
