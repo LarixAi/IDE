@@ -309,8 +309,8 @@ function renderComposer(nonce) {
     }
 
     .thread {
-      padding: 16px 16px 210px;
-      scroll-padding-bottom: 210px;
+      padding: 16px;
+      scroll-padding-bottom: 16px;
       background: #1e1e1e;
     }
     .empty {
@@ -370,14 +370,20 @@ function renderComposer(nonce) {
       background: #252525;
     }
 
+    /* Keep the Composer in normal flex flow so chat/output content can never
+       slide underneath it when changed-file rows or notices increase height. */
     footer {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      left: 0;
+      position: relative;
       z-index: 12;
-      padding: 28px 13px 13px;
-      background: linear-gradient(transparent, #1e1e1e 24%);
+      flex: 0 0 auto;
+      min-height: 0;
+      padding: 10px 13px 13px;
+      background: linear-gradient(to bottom, #1e1e1e00, #1e1e1e 14px);
+    }
+    .changed-files.on {
+      max-height: min(132px, 24vh);
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
     .v19-compose-status {
       min-height: 25px;
@@ -715,11 +721,11 @@ function renderComposer(nonce) {
         padding-left: 10px;
       }
       .thread {
-        padding: 12px 11px 250px;
-        scroll-padding-bottom: 250px;
+        padding: 12px 11px;
+        scroll-padding-bottom: 12px;
       }
       footer {
-        padding: 24px 8px 8px;
+        padding: 8px 8px 8px;
       }
       .bar {
         display: grid;
