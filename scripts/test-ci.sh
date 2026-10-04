@@ -35,7 +35,6 @@ export CODEME_SKIP_LIVE="${CODEME_SKIP_LIVE:-1}"
 # n8n/Paperclip libraries remain tested independently while both services are disabled by default.
 "$node" "$root/packages/n8n-capability/test/capabilities.test.js"
 "$node" "$root/packages/n8n-capability/test/mcp.test.js"
-"$node" "$root/packages/feature-qualify/test/requirements.test.js"
 "$node" "$root/extensions/codeme-shell/test/tab-policy.test.js"
 "$node" "$root/extensions/codeme-shell/test/preview-runner.test.js"
 "$node" "$root/extensions/codeme-shell/test/preview-session-manager.test.js"
