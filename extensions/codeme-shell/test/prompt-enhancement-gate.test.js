@@ -254,7 +254,8 @@ async function main() {
   assert.ok(html.includes("Understanding your request…"));
   assert.ok(!html.includes("Send did not receive a response. Try again."));
   assert.ok(!html.includes("}, 4000);"), "composer must not abandon a slow n8n enhancement after four seconds");
-  assert.ok(html.includes("#model { flex: 1 1 128px; min-width: 96px;"), "model selector must stay visible in a narrow Composer");
+  assert.ok(html.includes(".unified-composer #model {"), "model selector must exist in the unified Composer");
+  assert.ok(html.includes("min-width: 70px;"), "model selector must stay visible in a narrow Composer");
   assert.ok(html.includes('option.value = item.provider + "::" + item.id'), "model options must distinguish Local and Server IDs");
   assert.ok(html.includes("option.dataset.modelId || option.value"), "model selection must send the real Ollama model id");
   assert.ok(!html.includes('document.createElement("optgroup")'), "model picker must avoid optgroups that can render blank in the sidebar");

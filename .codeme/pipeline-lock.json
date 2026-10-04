@@ -1,22 +1,23 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "CodeMe Pipeline v2 Canonical Lock",
-  "baselineCommit": "f2f81e3149bf6801ef59ba3829e95e7d7d856f5a",
-  "baselineBranch": "codeme/real-ide-v19",
-  "lockedAt": "2026-10-03",
+  "baselineCommit": "c1cba678338f4c1b61f271c81492e42e8318eb72",
+  "baselineBranch": "codeme/openhands-step-loop-v1",
+  "lockedAt": "2026-10-04",
   "policy": {
     "owner": "LarixAi",
     "rule": "Do not modify protected pipeline files or update this manifest unless the repository owner has explicitly approved a pipeline change.",
-    "addons": "New features should integrate through external tools, capabilities, providers, UI modules, or other extension points without changing the protected pipeline core."
+    "addons": "New features should integrate through external tools, capabilities, providers, UI modules, or other extension points without changing the protected pipeline core.",
+    "approvedChange": "Owner-approved OpenHands-style event-step model loop port; existing protected-file changes already present on IDE/main are incorporated into the refreshed baseline."
   },
   "protectedFiles": {
-    "packages/agent-runtime/pipeline-run.js": "fd25cdbfbf87792ca0486a8071efbf2e45dd06de",
-    "packages/agent-runtime/pipeline-loop.js": "37467e2b15635b28eaf12f75b1af0393fca00b83",
+    "packages/agent-runtime/pipeline-run.js": "55a7ff9a7d8bd959714b653ffc99784d9c8a602b",
+    "packages/agent-runtime/pipeline-loop.js": "4e7ebea2e736657cf500242ddd60424abfea5049",
     "packages/agent-runtime/pipeline-context.js": "79c906348f6f50b1e416ca3cad0223803ff021ab",
-    "packages/agent-runtime/pipeline-instructions.js": "bec7ad113d7432e1ca12a4638cd0f4e14860bd01",
-    "packages/agent-runtime/agent-run.js": "94f0015ce6e2e7ebdce39ced56815d6efa36b123",
+    "packages/agent-runtime/pipeline-instructions.js": "472de57e802ab3e0066bf4ad2356f209fd57bbf8",
+    "packages/agent-runtime/agent-run.js": "d73a0500e3be91f055e462c1203ea4957db608ec",
     "packages/agent-runtime/model-provider.js": "d6991d5285f07698878c7441b88cead48b65b6a7",
-    "packages/agent-runtime/tool-registry.js": "9d65de1e22be732322b17a2a2f2108a76a15a6ac",
+    "packages/agent-runtime/tool-registry.js": "8f86e4cab60cf3417261c0ffb02cd2f4ce1987ba",
     "packages/agent-runtime/capability.js": "3fd1f96f6b0a8e26e8a49fbdc7241dfea50e269c",
     "packages/agent-runtime/requirements.js": "9b0f98709b9e4c3f35baf85ffffd881a5c4e4339",
     "packages/agent-runtime/strategy.js": "cc9eaa7a197d43c8dc9d0f88f9923fc43ebda4c9",
@@ -33,5 +34,13 @@
     "new UI controls and views",
     "new tool implementations that preserve existing registry contracts",
     "new optional services that do not alter protected pipeline semantics"
+  ],
+  "approvedChanges": [
+    {
+      "date": "2026-10-04",
+      "change": "OpenHands-style stateless event-step reasoning/action loop architecture",
+      "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
+      "branch": "codeme/openhands-step-loop-v1"
+    }
   ]
 }

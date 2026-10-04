@@ -5,6 +5,11 @@ const {
   isConnectionLoss,
   checkpointState,
 } = require("./pipeline-recovery");
+const {
+  prepareAgentStep,
+  eventsForAssistantReply,
+  eventForObservation,
+} = require("./agent-step");
 
 const CODE_TURN_DEADLINE_MS = 300000;
 const NORMAL_TURN_DEADLINE_MS = 180000;
@@ -224,6 +229,8 @@ async function runPipeline(options) {
   const resumed = options.resumeFrom && typeof options.resumeFrom === "object" ? options.resumeFrom : null;
   const messages = (resumed && Array.isArray(resumed.messages) ? resumed.messages : (options.messages || []))
     .map((message) => ({ ...message }));
+  const agentEvents = (resumed && Array.isArray(resumed.agentEvents) ? resumed.agentEvents : (options.agentEvents || []))
+    .map((event) => ({ ...event }));
   const tools = Array.isArray(options.tools) ? options.tools : [];
   const knownNames = new Set(tools.map((tool) => tool.name));
   const readOnlyMode = options.mode === "read_only";
@@ -239,10 +246,19 @@ async function runPipeline(options) {
   let toolCallCount = resumed ? Number(resumed.toolCallCount || 0) : 0;
   let finalText = resumed ? String(resumed.finalText || "") : "";
   let lastVerify = null;
-  let lastCheckpoint = resumed ? { ...resumed, messages: messages.map((message) => ({ ...message })) } : null;
+  let lastCheckpoint = resumed
+    ? { ...resumed, messages: messages.map((message) => ({ ...message })), agentEvents: agentEvents.map((event) => ({ ...event })) }
+    : null;
+
+  const emitAgentEvent = (event) => {
+    if (!event || typeof event !== "object") return null;
+    agentEvents.push({ ...event });
+    onEvent({ type: "agent_event", event: { ...event } });
+    return event;
+  };
 
   const saveCheckpoint = () => {
-    lastCheckpoint = checkpointState({ turn, messages, toolCallCount, repairs, finalText });
+    lastCheckpoint = checkpointState({ turn, messages, toolCallCount, repairs, finalText, agentEvents });
     if (typeof options.onCheckpoint === "function") options.onCheckpoint(lastCheckpoint);
     return lastCheckpoint;
   };
@@ -269,6 +285,7 @@ async function runPipeline(options) {
       messages,
       verify: lastVerify,
       toolCallCount,
+      agentEvents,
       ...(reason === "model_offline" || reason === "timeout" ? { checkpoint: lastCheckpoint || saveCheckpoint() } : {}),
     };
   };
@@ -295,6 +312,17 @@ async function runPipeline(options) {
     let turnMessages = answerOnlyTurn
       ? compactReadOnlyAnswerMessages(messages, options.goal, answerOnlyReason)
       : messages;
+
+    if (!answerOnlyTurn) {
+      const prepared = prepareAgentStep(turnMessages, {
+        contextWindowChars: options.contextWindowChars || 56000,
+        condenseTriggerRatio: options.condenseTriggerRatio,
+        condenseTargetRatio: options.condenseTargetRatio,
+        keepRecent: options.condenseKeepRecent,
+      });
+      turnMessages = prepared.messages;
+      for (const event of prepared.events || []) emitAgentEvent({ ...event, turn });
+    }
 
     const requestModel = (signal) => options.provider.complete({
       model: options.model,
@@ -434,6 +462,13 @@ async function runPipeline(options) {
       toolCalls,
       usage: reply && reply.usage || null,
     });
+    for (const event of eventsForAssistantReply(text, toolCalls, {
+      turn,
+      mode: options.mode,
+      confirmationPolicy: options.confirmationPolicy || "direct",
+    })) {
+      emitAgentEvent(event);
+    }
     messages.push({
       role: "assistant",
       content: text,
@@ -569,6 +604,7 @@ async function runPipeline(options) {
         result,
         durationMs: Date.now() - startedTool,
       });
+      emitAgentEvent(eventForObservation(call, result, { turn }));
       messages.push({
         role: "tool",
         name: call.name,

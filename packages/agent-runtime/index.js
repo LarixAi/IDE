@@ -10,6 +10,10 @@ const { diagnose } = require("./diagnosis");
 const { selectCapability, recommendCapability, isSiteLayoutGoal } = require("./progress");
 const { decideProject, isDependencyFreeStatic } = require("./project-decision");
 const { hasNoEditDirective, stripNegatedEditing, hasEditIntent, isResearchOnlyRequest } = require("./intent");
+const { prepareAgentStep, eventsForAssistantReply, eventForObservation } = require("./agent-step");
+const { condenseMessages, messageChars } = require("./context-condenser");
+const { analyzeAction, requiresConfirmation } = require("./security-analyzer");
+const { AGENT_EVENT_TYPES, createAgentEvent, messageEvent, actionEvent, observationEvent } = require("./agent-events");
 
 module.exports = {
   ModelProvider,
@@ -40,4 +44,16 @@ module.exports = {
   stripNegatedEditing,
   hasEditIntent,
   isResearchOnlyRequest,
+  prepareAgentStep,
+  eventsForAssistantReply,
+  eventForObservation,
+  condenseMessages,
+  messageChars,
+  analyzeAction,
+  requiresConfirmation,
+  AGENT_EVENT_TYPES,
+  createAgentEvent,
+  messageEvent,
+  actionEvent,
+  observationEvent,
 };
