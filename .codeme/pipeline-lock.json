@@ -1,18 +1,18 @@
 {
   "version": 2,
   "name": "CodeMe Pipeline v2 Canonical Lock",
-  "baselineCommit": "c1cba678338f4c1b61f271c81492e42e8318eb72",
-  "baselineBranch": "codeme/openhands-step-loop-v1",
+  "baselineCommit": "a0b5fa75f8fd4be6a5eb773e6fefe83752058e39",
+  "baselineBranch": "main",
   "lockedAt": "2026-10-04",
   "policy": {
     "owner": "LarixAi",
     "rule": "Do not modify protected pipeline files or update this manifest unless the repository owner has explicitly approved a pipeline change.",
     "addons": "New features should integrate through external tools, capabilities, providers, UI modules, or other extension points without changing the protected pipeline core.",
-    "approvedChange": "Owner-approved OpenHands-style event-step model loop port; existing protected-file changes already present on IDE/main are incorporated into the refreshed baseline."
+    "approvedChange": "Owner-approved cutover to packages/agent-runtime/agent-loop.js as the single canonical OpenHands-style production model loop; pipeline-loop.js is compatibility-only."
   },
   "protectedFiles": {
-    "packages/agent-runtime/pipeline-run.js": "55a7ff9a7d8bd959714b653ffc99784d9c8a602b",
-    "packages/agent-runtime/pipeline-loop.js": "4e7ebea2e736657cf500242ddd60424abfea5049",
+    "packages/agent-runtime/pipeline-run.js": "314dd7706d43b481d6525977d0c70edae97ac333",
+    "packages/agent-runtime/pipeline-loop.js": "1584ca08af8d085480b495a1daff3c861f2b38a8",
     "packages/agent-runtime/pipeline-context.js": "79c906348f6f50b1e416ca3cad0223803ff021ab",
     "packages/agent-runtime/pipeline-instructions.js": "472de57e802ab3e0066bf4ad2356f209fd57bbf8",
     "packages/agent-runtime/agent-run.js": "d73a0500e3be91f055e462c1203ea4957db608ec",
@@ -25,7 +25,9 @@
     "packages/agent-runtime/project-decision.js": "85a493becad2e193f19c09fd42420c28f945a9e6",
     "extensions/codeme-shell/composer-session.js": "2d4bb1b7551179973b35c070debcd96ca1fd6c0f",
     "packages/agent-runtime/test/pipeline-v2.test.js": "48f9a48ff98d236803c9729a380583e294f8f06d",
-    "extensions/codeme-shell/test/composer-pipeline-v2.test.js": "71f6062c045cb84fc5d1af7c2e3fbe36422c8ab1"
+    "extensions/codeme-shell/test/composer-pipeline-v2.test.js": "71f6062c045cb84fc5d1af7c2e3fbe36422c8ab1",
+    "packages/agent-runtime/agent-loop.js": "ad25e3aaf126e9a68b6d94741fe701068012f516",
+    "packages/agent-runtime/test/canonical-agent-loop.test.js": "a3a28a324d51f95b77f67a14c16480c8c2bdd6a4"
   },
   "extensionPoints": [
     "packages/n8n-capability/**",
@@ -41,6 +43,12 @@
       "change": "OpenHands-style stateless event-step reasoning/action loop architecture",
       "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
       "branch": "codeme/openhands-step-loop-v1"
+    },
+    {
+      "date": "2026-10-04",
+      "change": "Single-loop cutover: agent-loop.js is canonical; pipeline-loop.js reduced to compatibility shim",
+      "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
+      "branch": "main"
     }
   ]
 }
