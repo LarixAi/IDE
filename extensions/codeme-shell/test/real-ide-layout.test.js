@@ -18,6 +18,15 @@ test("Composer routes approved mock controls to real IDE surfaces", () => {
   assert.doesNotMatch(html, /class="fake-terminal"/);
 });
 
+test("Composer footer stays in flex flow and cannot cover chat output", () => {
+  const html = renderComposer("test-nonce");
+  assert.match(html, /Keep the Composer in normal flex flow/);
+  assert.match(html, /footer \{\s*position: relative;[\s\S]*?flex: 0 0 auto;/);
+  assert.match(html, /\.thread \{\s*padding: 16px;\s*scroll-padding-bottom: 16px;/);
+  assert.match(html, /\.changed-files\.on \{\s*max-height: min\(132px, 24vh\);\s*overflow-y: auto;/);
+  assert.doesNotMatch(html, /\.thread \{\s*padding: 16px 16px 210px;/);
+});
+
 test("extension bridges Composer to native Code OSS commands", () => {
   const source = fs.readFileSync(path.join(shellRoot, "extension.js"), "utf8");
   assert.match(source, /workbench\.view\.explorer/);
