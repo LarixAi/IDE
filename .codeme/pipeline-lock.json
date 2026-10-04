@@ -14,7 +14,7 @@
     "packages/agent-runtime/pipeline-run.js": "6611dca577ccd89e6d536568732274861f2c15e0",
     "packages/agent-runtime/pipeline-loop.js": "1584ca08af8d085480b495a1daff3c861f2b38a8",
     "packages/agent-runtime/pipeline-context.js": "79c906348f6f50b1e416ca3cad0223803ff021ab",
-    "packages/agent-runtime/pipeline-instructions.js": "472de57e802ab3e0066bf4ad2356f209fd57bbf8",
+    "packages/agent-runtime/pipeline-instructions.js": "0529032ef2f7a426bc2d2e23bf828fabc89f6f34",
     "packages/agent-runtime/agent-run.js": "b94e4491ba5c57c49481493f8feaf1547c4d32ef",
     "packages/agent-runtime/model-provider.js": "d6991d5285f07698878c7441b88cead48b65b6a7",
     "packages/agent-runtime/tool-registry.js": "8f86e4cab60cf3417261c0ffb02cd2f4ce1987ba",
@@ -61,6 +61,12 @@
       "change": "Preserve existing Ask/Plan read-only tool contract during single-loop cutover by withholding browser.check",
       "source": "owner-approved single-loop migration",
       "branch": "codeme/openhands-loop-only"
+    },
+    {
+      "date": "2026-10-04",
+      "change": "Synchronize canonical lock with the owner-merged prompt engineering contracts already present on main",
+      "source": "main commit 388f7964eb274ba7040eac334abcc1f882944735",
+      "branch": "main"
     }
   ]
 }
