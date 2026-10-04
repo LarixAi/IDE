@@ -6,11 +6,21 @@ const { analyzeImages, safeAttachmentPath } = require("./vision-integration");
 const SETTINGS_KEY = "codeme.n8n.settings";
 const SECRET_KEY = "codeme.n8n.mcpToken";
 
+function envFlag(value, fallback = false) {
+  if (value == null || value === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(String(value).trim());
+}
+
+function n8nMasterEnabled() {
+  return envFlag(process.env.CODEME_N8N_ENABLED, false);
+}
+
 function clip(value, limit) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
 function publicDefaults() {
+  const enabled = n8nMasterEnabled();
   const configuredEnhanceUrl = process.env.CODEME_N8N_ENHANCE_URL || "http://127.0.0.1:5678/webhook/prompt.enrich";
   const autoEnhanceEnv = String(process.env.CODEME_N8N_AUTO_ENHANCE || "").trim().toLowerCase();
   const autoEnhance = autoEnhanceEnv
@@ -21,9 +31,10 @@ function publicDefaults() {
     ? Math.min(600000, Math.max(15000, requestedTimeout))
     : 200000;
   return {
-    mcpEnabled: true,
+    enabled,
+    mcpEnabled: enabled,
     mcpUrl: process.env.CODEME_N8N_MCP_URL || defaultMcpUrl(),
-    autoEnhance,
+    autoEnhance: enabled && autoEnhance,
     enhanceWebhookUrl: configuredEnhanceUrl,
     enhanceTimeoutMs,
   };
@@ -227,8 +238,13 @@ class N8nIntegration {
   }
 
   settings() {
+    const defaults=publicDefaults();
     const stored=this.context.globalState.get(SETTINGS_KEY)||{};
-    return { ...publicDefaults(), ...stored };
+    const merged={ ...defaults, ...stored };
+    if (!defaults.enabled) {
+      return { ...merged, enabled:false, mcpEnabled:false, autoEnhance:false };
+    }
+    return { ...merged, enabled:true };
   }
 
   async secret() {
@@ -544,4 +560,4 @@ function listWorkspaceHints(root) {
   return found;
 }
 
-module.exports={N8nIntegration,listWorkspaceHints,localEnhance,attachmentRefs,parseEnhancementResponse,timedSignal};
+module.exports={N8nIntegration,listWorkspaceHints,localEnhance,attachmentRefs,parseEnhancementResponse,timedSignal,n8nMasterEnabled};

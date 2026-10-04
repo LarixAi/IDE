@@ -12,7 +12,7 @@ const { ComposerSession, listOllamaModels } = require("./composer-session");
 const { ConversationStore } = require("./conversation-store");
 const { hasWorkspaceEditorInGroups } = require("./tab-policy");
 const { loadRuntimeEnv } = require("./runtime-config");
-const { N8nIntegration } = require("./n8n-integration");
+const { N8nIntegration, n8nMasterEnabled } = require("./n8n-integration");
 const { wrapToolCallCompat } = require("./model-tool-compat");
 const { wrapResponsePolicy } = require("./model-response-policy");
 const { PaperclipBridge } = require("./paperclip-bridge");
@@ -1016,7 +1016,9 @@ class ComposerViewProvider {
     this.view = undefined;
     this.paperclip = null;
     this.multitask = null;
-    this.capabilities = N8nCapabilityProvider ? new N8nCapabilityProvider({ retries: 0, retryDelayMs: 1 }) : null;
+    this.capabilities = N8nCapabilityProvider && n8nMasterEnabled()
+      ? new N8nCapabilityProvider({ retries: 0, retryDelayMs: 1 })
+      : null;
     this.n8n = new N8nIntegration(context);
     this.terminalObserver = new TerminalObserver(vscode).start();
     this.externalTools = new UniversalMcpRegistry(context, this.n8n, [this.terminalObserver]);

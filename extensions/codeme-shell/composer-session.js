@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { startAgentRun, startPipelineRun, resumePipelineRun } = require("../../packages/agent-runtime");
+const { startPipelineRun, resumePipelineRun } = require("../../packages/agent-runtime");
 const { stripNegatedEditing } = require("../../packages/agent-runtime/intent");
 const { composerStage, composerActivity, compactTools, compactRunStream, diffsByFile, formatGoal, normalizeComposerMode, agentModeFor, taskClassFor, looksLikeWorkspaceEdit, isProgressTalk } = require("./composer-client");
 
@@ -828,10 +828,7 @@ class ComposerSession {
     const publishing = new PublishingStore(this.store, (run) => this.publish(requestId, run));
     let handle;
     try {
-      const runAgent = process.env.CODEME_AGENT_PIPELINE === "legacy"
-        ? startAgentRun
-        : startPipelineRun;
-      handle = runAgent({
+      handle = startPipelineRun({
         goal,
         model: this.selected.id,
         providerName: this.selected.provider || provider.name || "ollama",

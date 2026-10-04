@@ -16,7 +16,11 @@ class PaperclipBridge {
   constructor(options = {}) {
     if (!options.session) throw new Error("PaperclipBridge requires a CodeMe session");
     this.session = options.session;
-    this.enabled = options.enabled ?? envFlag(process.env.CODEME_PAPERCLIP_ENABLED, false);
+    const configuredEnabled = options.enabled ?? envFlag(process.env.CODEME_PAPERCLIP_ENABLED, false);
+    const masterEnabled = options.enabled !== undefined
+      ? true
+      : envFlag(process.env.CODEME_PAPERCLIP_MASTER_ENABLED, false);
+    this.enabled = Boolean(masterEnabled && configuredEnabled);
     this.host = options.host || "127.0.0.1";
     this.port = Number(options.port || process.env.CODEME_PAPERCLIP_PORT || 7788);
     this.bridgeToken = String(options.bridgeToken || process.env.CODEME_PAPERCLIP_BRIDGE_TOKEN || "");

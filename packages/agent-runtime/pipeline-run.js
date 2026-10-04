@@ -40,6 +40,7 @@ const READ_ONLY_BLOCKED = new Set([
   "sandbox.run",
   "process.start",
   "tests.run",
+  "browser.check",
   "browser.interact",
 ]);
 const CODE_FILE = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|go|rs|java|cs|rb|php|swift|dart|c|cc|cpp|h|hpp)$/i;
