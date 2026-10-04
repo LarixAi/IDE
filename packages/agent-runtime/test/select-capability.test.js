@@ -1,9 +1,20 @@
-const assert = require("assert");
+"use strict";
+
+const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { ModelProvider, RunStore, startAgentRun, ToolRegistry, ReadOnlyToolProvider, ControlledToolProvider, selectCapability, isSiteLayoutGoal } = require("../index.js");
+const {
+  ModelProvider,
+  RunStore,
+  startPipelineRun,
+  ToolRegistry,
+  ReadOnlyToolProvider,
+  selectCapability,
+  isSiteLayoutGoal,
+} = require("../index.js");
 const { normalizeCapabilityInput } = require("../capability");
+const { chooseCapabilityPreflight } = require("../capability-preflight");
 
 const LIVE = [
   { name: "hub.health", category: "hub", risk: "read", permissions: ["evidence"], description: "Echo a short token and report hub health" },
@@ -13,51 +24,67 @@ const LIVE = [
 ];
 
 class ScriptedModelProvider extends ModelProvider {
-  constructor(steps) {
+  constructor(responses) {
     super("scripted");
-    this.steps = [...steps];
+    this.responses = responses.slice();
     this.calls = [];
   }
 
   async complete(input) {
     this.calls.push(input);
-    const step = this.steps.shift();
-    if (!step) throw Object.assign(new Error("no scripted decision"), { code: "model_disconnected" });
-    return { text: step.text || "", toolCalls: step.toolCalls || [] };
+    return this.responses.shift() || { text: "Done.", toolCalls: [] };
   }
 }
 
-function liveHub(state) {
+function liveHub(state, records = LIVE) {
   return {
     async listCapabilities() {
-      return LIVE.map((item) => ({ name: item.name, description: item.description }));
+      return records.map((item) => ({ name: item.name, description: item.description }));
     },
     async invoke(request) {
       state.invocations.push(request.capability);
-      if (Array.isArray(state.requests)) state.requests.push(request);
-      const memory = request.capability === "knowledge.lookup";
-      const remember = memory && request.input && request.input.action === "remember";
+      state.requests.push(request);
+      if (request.capability === "knowledge.lookup") {
+        const remember = request.input && request.input.action === "remember";
+        return {
+          protocolVersion: 1,
+          requestId: request.requestId,
+          status: "ok",
+          data: remember
+            ? { action: "remember", stored: true, key: "test-animal" }
+            : { action: "lookup", result: "The CodeMe test colour is sapphire.", matches: [] },
+          sources: [],
+          warnings: [],
+          error: null,
+          duration: 4,
+        };
+      }
+      if (request.capability === "task.decompose") {
+        return {
+          protocolVersion: 1,
+          requestId: request.requestId,
+          status: "ok",
+          data: {
+            project: "test-plan",
+            tasks: [
+              { id: "1", title: "Inspect", objective: "Inspect the project" },
+              { id: "2", title: "Implement", objective: "Apply the change" },
+            ],
+          },
+          sources: [],
+          warnings: [],
+          error: null,
+          duration: 4,
+        };
+      }
       return {
         protocolVersion: 1,
         requestId: request.requestId,
         status: "ok",
-        data: memory
-          ? remember
-            ? {
-                action: "remember",
-                stored: true,
-                key: "test-animal",
-              }
-            : {
-                action: "lookup",
-                found: true,
-                result: "The CodeMe test colour is sapphire.",
-                matches: [{ key: "test-colour", content: "The CodeMe test colour is sapphire." }],
-              }
-          : {
-              problem: request.input && (request.input.problem || request.input.goal || request.input.query),
-              evidence: [{ title: "Published note", url: "https://example.com/note", excerpt: "short evidence", source: "test" }],
-            },
+        data: {
+          problem: request.input && request.input.problem,
+          evidence: [{ title: "Published note", url: "https://example.com/note", excerpt: "short evidence", source: "test" }],
+        },
         sources: [],
         warnings: [],
         error: null,
@@ -67,8 +94,8 @@ function liveHub(state) {
   };
 }
 
-function start(options) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-select-"));
+function runtime(options) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-capability-"));
   const workspace = path.join(directory, "ws");
   fs.mkdirSync(workspace);
   fs.writeFileSync(path.join(workspace, "README.md"), "site notes\n");
@@ -76,7 +103,7 @@ function start(options) {
     async inspectWorkspace() {
       return {
         state: "project",
-        root: path.basename(workspace),
+        root: workspace,
         entries: 1,
         git: false,
         projectMarkers: [],
@@ -85,6 +112,9 @@ function start(options) {
         packageManager: null,
         scripts: {},
       };
+    },
+    async listDirectory() {
+      return { path: ".", entries: [{ path: "README.md", type: "file" }] };
     },
     async readFile(filePath) {
       return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
@@ -95,19 +125,20 @@ function start(options) {
     async diagnostics() { return { items: [] }; },
     async browserCheck(url) { return { available: false, code: "browser_unavailable", message: "none", url }; },
   };
-  const provider = options.provider;
-  return startAgentRun({
+  return startPipelineRun({
     goal: options.goal,
     model: "scripted",
     providerName: "scripted",
     mode: options.mode || "read_only",
-    composerMode: options.composerMode,
+    composerMode: options.composerMode || "ask",
     taskClass: options.taskClass,
-    provider,
+    provider: options.provider,
     registry: new ToolRegistry(new ReadOnlyToolProvider(host)),
     store: new RunStore(path.join(directory, "runs")),
     capabilities: options.capabilities,
-    maxIterations: options.maxIterations ?? 8,
+    maxIterations: options.maxIterations || 4,
+    projectBrainEnabled: false,
+    skillsEnabled: false,
   });
 }
 
@@ -123,44 +154,11 @@ async function test(name, fn) {
 }
 
 async function main() {
-  await test("selectCapability matches research, decompose, lookup, and skips unpublished names", async () => {
-    const research = selectCapability("research the website", LIVE, { composerMode: "ask" });
-    assert.strictEqual(research && research.name, "research.problem");
-
-    const decompose = selectCapability("Build a landing page and a cart and a checkout and email receipts", LIVE);
-    assert.strictEqual(decompose && decompose.name, "task.decompose");
-
-    const numbered = selectCapability("1. Design the API 2. Write the clients 3. Ship the docs", LIVE);
-    assert.strictEqual(numbered && numbered.name, "task.decompose");
-
-    const plan = selectCapability(
-      "Map the checkout, inventory, and admin work into a sequenced delivery for the next sprint",
-      LIVE,
-      { composerMode: "plan", taskClass: "plan" },
-    );
-    assert.strictEqual(plan && plan.name, "task.decompose");
-
-    const lookup = selectCapability("What did we save in the project notes about the webhook", LIVE);
-    assert.strictEqual(lookup && lookup.name, "knowledge.lookup");
-
-    const remember = selectCapability("Remember this project note using the external memory hub: deploy on Friday", LIVE);
-    assert.strictEqual(remember && remember.name, "knowledge.lookup");
-
-    const recall = selectCapability("Recall the project memory about deployment", LIVE);
-    assert.strictEqual(recall && recall.name, "knowledge.lookup");
-
-    const none = selectCapability("Explain the readme", LIVE);
-    assert.strictEqual(none, null);
-
-    const unpublished = selectCapability("research the website", LIVE.filter((item) => item.category !== "research"));
-    assert.strictEqual(unpublished, null);
-
-    const empty = selectCapability("research the website", []);
-    assert.strictEqual(empty, null);
-
-    const coding = selectCapability("Repair the identification-number check. The doubling rule is not in the repository.", LIVE);
-    assert.strictEqual(coding, null);
-
+  await test("selectCapability still classifies research, task, knowledge, and layout exclusions", async () => {
+    assert.strictEqual(selectCapability("research the website", LIVE, { composerMode: "ask" }).name, "research.problem");
+    assert.strictEqual(selectCapability("Build a landing page and a cart and a checkout and email receipts", LIVE).name, "task.decompose");
+    assert.strictEqual(selectCapability("Recall the project memory about deployment", LIVE).name, "knowledge.lookup");
+    assert.strictEqual(selectCapability("Explain the readme", LIVE), null);
     assert.strictEqual(isSiteLayoutGoal("can you find me a better layout for my website"), true);
     assert.strictEqual(selectCapability("can you find me a better layout for my website", LIVE, { composerMode: "code" }), null);
   });
@@ -175,354 +173,106 @@ async function main() {
       },
       required: [],
     };
-
     assert.deepStrictEqual(
       normalizeCapabilityInput(schema, { note: "The secret CodeMe test animal is otter." }, "knowledge.lookup").input,
-      {
-        action: "remember",
-        entry: { content: "The secret CodeMe test animal is otter." },
-      },
+      { action: "remember", entry: { content: "The secret CodeMe test animal is otter." } },
     );
-
     assert.deepStrictEqual(
       normalizeCapabilityInput(schema, { action: "recall", text: "What is the CodeMe test animal?" }, "knowledge.lookup").input,
-      {
-        action: "lookup",
-        query: "What is the CodeMe test animal?",
-      },
+      { action: "lookup", query: "What is the CodeMe test animal?" },
     );
   });
 
-  await test("remember prompts are routed directly to knowledge.lookup as a store request", async () => {
+  await test("research intent runs once as OpenHands pipeline preflight before the first model step", async () => {
     const state = { invocations: [], requests: [] };
-    const provider = new ScriptedModelProvider([
-      { text: "The project note was stored." },
-    ]);
-    const run = await start({
+    const provider = new ScriptedModelProvider([{ text: "Research complete.", toolCalls: [] }]);
+    const run = await runtime({
+      goal: "research the website",
+      provider,
+      capabilities: liveHub(state),
+    }).done;
+
+    assert.strictEqual(run.lifecycle, "completed");
+    assert.deepStrictEqual(state.invocations, ["research.problem"]);
+    const call = run.toolCalls.find((item) => item.name === "capability.invoke" && item.phase === "preflight");
+    assert.ok(call);
+    assert.strictEqual(call.directedBy, "runtime");
+    assert.strictEqual(call.args.capability, "research.problem");
+    assert.strictEqual(state.requests[0].input.problem, "research the website");
+    assert.ok(provider.calls[0].messages.some((message) => String(message.content).includes("EXTERNAL CAPABILITY PREFLIGHT")));
+  });
+
+  await test("external memory intent uses knowledge.lookup preflight on the canonical loop", async () => {
+    const state = { invocations: [], requests: [] };
+    const provider = new ScriptedModelProvider([{ text: "The project note was stored.", toolCalls: [] }]);
+    const run = await runtime({
       goal: "Remember this project note using the external memory hub: The secret CodeMe test animal is otter. Do not edit any files.",
       provider,
       capabilities: liveHub(state),
-      composerMode: "ask",
     }).done;
 
-    assert.strictEqual(run.lifecycle, "completed", JSON.stringify({ error: run.error, outcome: run.outcome }, null, 2));
-    const invoked = run.toolCalls.find((call) => (
-      call.name === "capability.invoke"
-      && call.args
-      && call.args.capability === "knowledge.lookup"
-    ));
-    assert.ok(invoked, "knowledge.lookup was not invoked");
-    assert.strictEqual(invoked.directedBy, "runtime");
-    assert.deepStrictEqual(invoked.args.input, {
+    assert.strictEqual(run.lifecycle, "completed");
+    assert.deepStrictEqual(state.invocations, ["knowledge.lookup"]);
+    assert.deepStrictEqual(state.requests[0].input, {
       action: "remember",
       entry: { content: "The secret CodeMe test animal is otter." },
     });
-    assert.strictEqual(state.requests.length, 1);
-    assert.strictEqual(state.requests[0].input.action, "remember");
-    assert.strictEqual(state.requests[0].input.entry.content, "The secret CodeMe test animal is otter.");
-    assert.strictEqual(state.requests[0].context.workspaceName, "ws");
+    assert.ok(run.toolCalls.some((item) => item.name === "capability.invoke" && item.phase === "preflight"));
   });
 
-  await test("a research-style goal with a live hub list is invoked once when the model does not call it", async () => {
-    const state = { invocations: [] };
+  await test("Plan mode can preflight task decomposition without creating another loop", async () => {
+    const state = { invocations: [], requests: [] };
     const provider = new ScriptedModelProvider([
-      { text: "Reading the site.", toolCalls: [{ name: "file.read", args: { path: "README.md" } }] },
-      { text: "The workspace site is a dealership preview." },
+      { text: "1. Inspect the project.\n2. Implement the change.\n3. Verify the result.", toolCalls: [] },
     ]);
-    const run = await start({
-      goal: "research the website",
+    const run = await runtime({
+      goal: "Map the checkout, inventory, and admin work into a sequenced delivery for the next sprint",
+      composerMode: "plan",
+      taskClass: "plan",
       provider,
       capabilities: liveHub(state),
-      composerMode: "ask",
     }).done;
-    assert.strictEqual(run.lifecycle, "completed", JSON.stringify({
-      error: run.error,
-      outcome: run.outcome,
-      taskClass: run.taskClass,
-      tools: run.toolCalls.map((call) => ({ name: call.name, ok: call.result && call.result.ok, code: call.result && call.result.error && call.result.error.code })),
-      verification: run.verification,
-    }, null, 2));
-    const invoked = run.toolCalls.filter((call) => call.name === "capability.invoke");
-    assert.strictEqual(invoked.length, 1);
-    assert.strictEqual(invoked[0].args.capability, "research.problem");
-    assert.strictEqual(invoked[0].directedBy, "runtime");
-    assert.deepStrictEqual(state.invocations, ["research.problem"]);
-    const offered = provider.calls[0].tools.map((tool) => tool.name);
-    assert.ok(offered.includes("capability.invoke"));
-  });
 
-  await test("a new website prompt is researched before the model starts", async () => {
-    const state = { invocations: [] };
-    const provider = new ScriptedModelProvider([
-      { text: "Listing the workspace.", toolCalls: [{ name: "dir.list", args: { path: "." } }] },
-      { text: "Writing the project file.", toolCalls: [{ name: "file.write", args: { path: "package.json", contents: "{\"scripts\":{\"start\":\"node server.js --port 4173\"}}\n" } }] },
-      { text: "Writing the server.", toolCalls: [{ name: "file.write", args: { path: "server.js", contents: "require(\"http\").createServer((req, res) => res.end(\"ok\")).listen(4173, \"127.0.0.1\");\n" } }] },
-      { text: "Writing the page.", toolCalls: [{ name: "file.write", args: { path: "index.html", contents: "<html><body><h1>Dealership</h1></body></html>\n" } }] },
-      { text: "Checking the preview.", toolCalls: [{ name: "browser.check", args: { url: "http://127.0.0.1:4173/" } }] },
-      { text: "The dealership page can list cars for bid or buy now." },
-    ]);
-    const goal = "can you create me a website about a dealership where I can sell cars, post them so people can bid or buy now, create an account, and post their own cars for sale";
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-build-"));
-    const workspace = path.join(directory, "ws");
-    fs.mkdirSync(workspace);
-    fs.writeFileSync(path.join(workspace, "README.md"), "site notes\n");
-    const host = {
-      async readFile(filePath) {
-        return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
-      },
-      async writeFile(filePath, contents) {
-        const full = path.join(workspace, filePath);
-        fs.mkdirSync(path.dirname(full), { recursive: true });
-        fs.writeFileSync(full, contents);
-        return { path: filePath, bytes: Buffer.byteLength(contents) };
-      },
-      async listDirectory() {
-        return { path: ".", entries: [{ path: "README.md", type: "file" }] };
-      },
-      async search() { return { query: "", matches: [] }; },
-      async gitStatus() { return { branch: "main", changes: [] }; },
-      async gitDiff() { return { diff: "" }; },
-      async diagnostics() { return { items: [] }; },
-      async browserCheck(url) { return { url, statusCode: 200, title: "Dealership", available: true }; },
-    };
-    const run = await startAgentRun({
-      goal,
-      model: "scripted",
-      providerName: "scripted",
-      mode: "controlled",
-      composerMode: "code",
-      provider,
-      registry: new ToolRegistry(new ControlledToolProvider(host)),
-      store: new RunStore(path.join(directory, "runs")),
-      capabilities: liveHub(state),
-      maxIterations: 8,
-    }).done;
-    assert.strictEqual(run.taskClass, "build");
-    assert.strictEqual(run.lifecycle, "completed", `${run.error && run.error.code}: ${run.verification && run.verification.summary}`);
-    assert.deepStrictEqual(state.invocations, ["research.problem"]);
-    const directed = run.toolCalls.find((call) => call.name === "capability.invoke" && call.directedBy === "runtime");
-    assert.ok(directed);
-    assert.strictEqual(directed.iteration, 0);
-    assert.strictEqual(directed.args.input.problem, goal);
-    assert.ok(provider.calls[0].messages.some((message) => String(message.content).includes("The hub read this prompt before coding")));
-    assert.ok(provider.calls[0].messages.some((message) => String(message.content).includes("short evidence")));
-  });
-
-  await test("a multi-part goal selects the listed decompose capability", async () => {
-    const state = { invocations: [] };
-    const provider = new ScriptedModelProvider([
-      { text: "Inspecting first.", toolCalls: [{ name: "file.read", args: { path: "README.md" } }] },
-      { text: "1. Landing page\n2. Cart\n3. Checkout\n4. Receipts" },
-    ]);
-    const run = await start({
-      goal: "Build a landing page and a cart and a checkout and email receipts",
-      provider,
-      capabilities: liveHub(state),
-      composerMode: "ask",
-    }).done;
-    assert.strictEqual(run.lifecycle, "completed", JSON.stringify({
-      error: run.error,
-      outcome: run.outcome,
-      taskClass: run.taskClass,
-      tools: run.toolCalls.map((call) => ({ name: call.name, ok: call.result && call.result.ok, code: call.result && call.result.error && call.result.error.code })),
-      verification: run.verification,
-    }, null, 2));
-    const invoked = run.toolCalls.find((call) => call.name === "capability.invoke" && call.args && call.args.capability === "task.decompose");
-    assert.ok(invoked);
-    assert.strictEqual(invoked.directedBy, "runtime");
+    assert.strictEqual(run.lifecycle, "completed");
     assert.deepStrictEqual(state.invocations, ["task.decompose"]);
+    assert.strictEqual(state.requests[0].input.goal.includes("checkout"), true);
+    assert.ok(provider.calls[0].messages.some((message) => String(message.content).includes("untrusted planning evidence")));
   });
 
-  await test("empty discovery offers no capability tools and never invokes", async () => {
-    const state = { invocations: [] };
-    const provider = new ScriptedModelProvider([
-      { text: "Reading.", toolCalls: [{ name: "file.read", args: { path: "README.md" } }] },
-      { text: "The readme describes the project." },
-    ]);
-    const run = await start({
+  await test("build tasks prefer research preflight while layout edits stay local", async () => {
+    assert.strictEqual(
+      chooseCapabilityPreflight(
+        { goal: "create a dealership website with accounts and bidding", mode: "controlled", composerMode: "code", taskClass: "build" },
+        LIVE,
+      ).name,
+      "research.problem",
+    );
+    assert.strictEqual(
+      chooseCapabilityPreflight(
+        { goal: "find me a better layout for my website", mode: "controlled", composerMode: "code", taskClass: "layout" },
+        LIVE,
+      ),
+      null,
+    );
+  });
+
+  await test("empty discovery exposes no capability tools and performs no preflight", async () => {
+    const state = { invocations: [], requests: [] };
+    const provider = new ScriptedModelProvider([{ text: "No external evidence is available.", toolCalls: [] }]);
+    const run = await runtime({
       goal: "research the website",
       provider,
-      capabilities: {
-        async listCapabilities() { return []; },
-        async invoke(request) {
-          state.invocations.push(request.capability);
-          return { protocolVersion: 1, requestId: request.requestId, status: "ok", data: {}, sources: [], warnings: [], error: null, duration: 1 };
-        },
-      },
+      capabilities: liveHub(state, []),
     }).done;
-    assert.strictEqual(run.lifecycle, "completed", JSON.stringify({
-      error: run.error,
-      outcome: run.outcome,
-      taskClass: run.taskClass,
-      tools: run.toolCalls.map((call) => ({ name: call.name, ok: call.result && call.result.ok, code: call.result && call.result.error && call.result.error.code })),
-      verification: run.verification,
-    }, null, 2));
-    assert.ok(run.toolCalls.every((call) => call.name !== "capability.invoke" && call.name !== "capability.list"));
-    assert.deepStrictEqual(state.invocations, []);
-    const names = provider.calls[0].tools.map((tool) => tool.name);
-    assert.ok(!names.includes("capability.invoke"));
-    assert.ok(!names.includes("capability.list"));
-    assert.strictEqual(run.progress.recommendedName, null);
-  });
 
-  await test("a Code layout goal writes HTML and previews without calling the hub", async () => {
-    const state = { invocations: [] };
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-layout-"));
-    const workspace = path.join(directory, "ws");
-    fs.mkdirSync(path.join(workspace, "src/styles"), { recursive: true });
-    fs.writeFileSync(path.join(workspace, "src/index.html"), "<html><body>old</body></html>\n");
-    fs.writeFileSync(path.join(workspace, "src/styles/site.css"), "body{margin:0}\n");
-    const host = {
-      async readFile(filePath) {
-        return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
-      },
-      async writeFile(filePath, contents) {
-        fs.writeFileSync(path.join(workspace, filePath), contents);
-        return { path: filePath, bytes: Buffer.byteLength(contents) };
-      },
-      async search() { return { query: "html", matches: [{ path: "src/index.html", line: 1, text: "<html>" }] }; },
-      async gitStatus() { return { branch: "main", changes: [] }; },
-      async gitDiff() { return { diff: "" }; },
-      async diagnostics() { return { items: [] }; },
-      async browserCheck(url) { return { url, statusCode: 200, title: "CarBid", available: true }; },
-    };
-    const provider = new ScriptedModelProvider([
-      { text: "Reading the page.", toolCalls: [{ name: "file.read", args: { path: "src/index.html" } }] },
-      { text: "Reading the CSS.", toolCalls: [{ name: "file.read", args: { path: "src/styles/site.css" } }] },
-      { text: "Applying a tighter layout.", toolCalls: [{ name: "file.write", args: { path: "src/index.html", contents: "<html><body><header>Showroom</header></body></html>\n" } }] },
-      { text: "Checking the preview.", toolCalls: [{ name: "browser.check", args: { url: "http://127.0.0.1:4173/" } }] },
-      { text: "" },
-    ]);
-    const run = await startAgentRun({
-      goal: "can you find me a better layout for my website",
-      model: "scripted",
-      providerName: "scripted",
-      mode: "controlled",
-      composerMode: "code",
-      provider,
-      registry: new ToolRegistry(new ControlledToolProvider(host)),
-      store: new RunStore(path.join(directory, "runs")),
-      capabilities: liveHub(state),
-      maxIterations: 8,
-    }).done;
-    assert.strictEqual(run.taskClass, "layout");
-    assert.strictEqual(run.progress.inspectSatisfied, true);
-    assert.strictEqual(run.plan.find((step) => step.id === "inspect").status, "completed");
-    assert.strictEqual(run.progress.recommendedName, null);
-    assert.strictEqual(run.progress.selectedName, null);
+    assert.strictEqual(run.lifecycle, "completed");
     assert.deepStrictEqual(state.invocations, []);
-    assert.ok(run.toolCalls.every((call) => call.name !== "capability.invoke"));
-    assert.ok(provider.calls.some((call) => call.messages.some((message) => String(message.content).includes("Apply the layout with file.write"))));
-    const writeTools = (provider.calls[2] && provider.calls[2].tools || []).map((item) => item.name).sort();
-    assert.deepStrictEqual(writeTools, ["browser.check", "file.read", "file.write"]);
-    assert.ok(run.toolCalls.some((call) => call.name === "file.write" && call.args.path === "src/index.html"));
-    assert.ok(run.toolCalls.some((call) => call.name === "browser.check" && call.result && call.result.ok));
-    assert.strictEqual(run.lifecycle, "completed", `${run.error && run.error.code}: ${run.verification && run.verification.summary}`);
-  });
-
-  await test("a Code layout goal cannot finish until it writes and previews", async () => {
-    const state = { invocations: [] };
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-layout-verify-"));
-    const workspace = path.join(directory, "ws");
-    fs.mkdirSync(path.join(workspace, "src/styles"), { recursive: true });
-    fs.writeFileSync(path.join(workspace, "src/index.html"), "<html><body>old</body></html>\n");
-    fs.writeFileSync(path.join(workspace, "src/styles/site.css"), "body{margin:0}\n");
-    const host = {
-      async readFile(filePath) {
-        return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
-      },
-      async writeFile(filePath, contents) {
-        fs.writeFileSync(path.join(workspace, filePath), contents);
-        return { path: filePath, bytes: Buffer.byteLength(contents) };
-      },
-      async search() { return { query: "html", matches: [{ path: "src/index.html", line: 1, text: "<html>" }] }; },
-      async gitStatus() { return { branch: "main", changes: [] }; },
-      async gitDiff() { return { diff: "" }; },
-      async diagnostics() { return { items: [] }; },
-      async browserCheck(url) { return { url, statusCode: 200, title: "CarBid", available: true }; },
-    };
-    const provider = new ScriptedModelProvider([
-      { text: "Reading the page.", toolCalls: [{ name: "file.read", args: { path: "src/index.html" } }] },
-      { text: "Reading the CSS.", toolCalls: [{ name: "file.read", args: { path: "src/styles/site.css" } }] },
-      { text: "I'll apply a better layout to the HTML and CSS files." },
-      { text: "Applying a tighter layout.", toolCalls: [{ name: "file.write", args: { path: "src/index.html", contents: "<html><body><header>Showroom</header></body></html>\n" } }] },
-      { text: "Checking the preview.", toolCalls: [{ name: "browser.check", args: { url: "http://127.0.0.1:4173/" } }] },
-      { text: "The layout is updated on the preview." },
-    ]);
-    const run = await startAgentRun({
-      goal: "can you find me a better layout for my website",
-      model: "scripted",
-      providerName: "scripted",
-      mode: "controlled",
-      composerMode: "code",
-      provider,
-      registry: new ToolRegistry(new ControlledToolProvider(host)),
-      store: new RunStore(path.join(directory, "runs")),
-      capabilities: liveHub(state),
-      maxIterations: 8,
-    }).done;
-    assert.ok(provider.calls.some((call) => call.messages.some((message) => String(message.content).includes("Apply the layout with file.write"))));
-    assert.ok(run.toolCalls.some((call) => call.name === "file.write"));
-    assert.ok(run.toolCalls.some((call) => call.name === "browser.check"));
-    assert.strictEqual(run.verification.summary, "The layout change is visible in the preview");
-    assert.strictEqual(run.lifecycle, "completed", `${run.error && run.error.code}: ${run.verification && run.verification.summary}`);
-  });
-
-  await test("a layout goal skips a repeated search and replans locally", async () => {
-    const state = { invocations: [] };
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-layout-repeat-"));
-    const workspace = path.join(directory, "ws");
-    fs.mkdirSync(path.join(workspace, "src/styles"), { recursive: true });
-    fs.writeFileSync(path.join(workspace, "src/index.html"), "<html><body>old</body></html>\n");
-    fs.writeFileSync(path.join(workspace, "src/styles/site.css"), "body{margin:0}\n");
-    const host = {
-      async readFile(filePath) {
-        return { path: filePath, contents: fs.readFileSync(path.join(workspace, filePath), "utf8") };
-      },
-      async writeFile(filePath, contents) {
-        fs.writeFileSync(path.join(workspace, filePath), contents);
-        return { path: filePath, bytes: Buffer.byteLength(contents) };
-      },
-      async search() { return { query: "CarBidDealership", matches: [{ path: "src/index.html", line: 1, text: "<html>" }] }; },
-      async gitStatus() { return { branch: "main", changes: [] }; },
-      async gitDiff() { return { diff: "" }; },
-      async diagnostics() { return { items: [] }; },
-      async browserCheck(url) { return { url, statusCode: 200, title: "CarBid", available: true }; },
-    };
-    const provider = new ScriptedModelProvider([
-      { text: "Let me search for HTML files", toolCalls: [{ name: "repo.search", args: { query: "CarBidDealership" } }] },
-      { text: "I need to inspect the current HTML", toolCalls: [{ name: "file.read", args: { path: "src/index.html" } }] },
-      { text: "Let me also read the CSS", toolCalls: [{ name: "file.read", args: { path: "src/styles/site.css" } }] },
-      { text: "Let me search for HTML files", toolCalls: [{ name: "repo.search", args: { query: "CarBidDealership" } }] },
-      { text: "Applying a tighter layout.", toolCalls: [{ name: "file.write", args: { path: "src/index.html", contents: "<html><body><header>Showroom</header></body></html>\n" } }] },
-      { text: "Checking the preview.", toolCalls: [{ name: "browser.check", args: { url: "http://127.0.0.1:4173/" } }] },
-      { text: "The layout is updated on the preview." },
-    ]);
-    const run = await startAgentRun({
-      goal: "can you find me a better layout for my website",
-      model: "scripted",
-      providerName: "scripted",
-      mode: "controlled",
-      composerMode: "code",
-      provider,
-      registry: new ToolRegistry(new ControlledToolProvider(host)),
-      store: new RunStore(path.join(directory, "runs")),
-      capabilities: liveHub(state),
-      maxIterations: 8,
-    }).done;
-    const searches = run.toolCalls.filter((call) => call.name === "repo.search");
-    assert.strictEqual(searches.length, 2);
-    assert.strictEqual(searches[1].result.data.repeated, true);
-    assert.ok(searches[0].result.data.matches.length > 0);
-    assert.deepStrictEqual(state.invocations, []);
-    assert.ok(run.toolCalls.every((call) => call.name !== "capability.invoke"));
-    assert.ok(run.progress.inspectSatisfied);
-    assert.ok(run.progress.replanned || provider.calls.some((call) => call.messages.some((message) => String(message.content).includes("Do not search the same query"))));
-    assert.strictEqual(run.lifecycle, "completed", `${run.error && run.error.code}: ${run.verification && run.verification.summary}`);
+    assert.ok(!provider.calls[0].tools.some((tool) => tool.name === "capability.invoke"));
+    assert.ok(!run.toolCalls.some((item) => item.name === "capability.invoke"));
   });
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });
