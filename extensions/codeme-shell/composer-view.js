@@ -1941,7 +1941,7 @@ function renderComposer(nonce) {
         chips.appendChild(chip);
       }
       const streamItems = state.stream || state.tools || [];
-      renderThread(state.thread || [], !running && Boolean(state.runId) && streamItems.length > 0);
+      renderThread(state.thread || [], !running && Boolean(state.runId));
       renderHistory(state.conversations || [], state.conversationId || "");
       newChat.disabled = running;
       historyToggle.disabled = running;

@@ -40,6 +40,8 @@ assert.ok(html.includes("ResourceURLs"));
 assert.ok(!html.includes("qwen3.5:9b"));
 assert.ok(!html.includes("File edits stay off"));
 assert.ok(!html.includes("workbench.action.chat.open"));
+assert.ok(html.includes('renderThread(state.thread || [], !running && Boolean(state.runId));'));
+assert.ok(!html.includes('renderThread(state.thread || [], !running && Boolean(state.runId) && streamItems.length > 0);'));
 
 const welcome = renderWelcome({
   detail: "A local model is selected.",
