@@ -6,7 +6,7 @@ const { renderEmptyEditor } = require("../empty-editor");
 const html = renderComposer("nonce-value");
 assert.ok(html.includes("nonce-nonce-value"));
 assert.ok(html.includes("composerKeyAction"));
-assert.ok(html.includes("Ask CodeMe anything, @ files or type /"));
+assert.ok(html.includes("Plan, Build, / for skills, @ for context"));
 assert.ok(html.includes(">CodeMe<"));
 assert.ok(html.includes('aria-label="Send">↑</button>'));
 assert.ok(html.includes("clearSendPending"));
