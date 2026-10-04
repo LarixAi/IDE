@@ -29,13 +29,9 @@ export CODEME_SKIP_LIVE="${CODEME_SKIP_LIVE:-1}"
 "$node" "$root/packages/agent-runtime/test/pipeline-v2.test.js"
 "$node" "$root/packages/agent-runtime/test/agent-step-loop.test.js"
 "$node" "$root/packages/agent-runtime/test/timeout-recovery.test.js"
-"$node" "$root/packages/agent-runtime/test/select-capability.test.js"
-"$node" "$root/packages/routing-qualify/test/gate11-qualification.test.js"
-"$node" "$root/packages/agent-runtime/test/stagnation.test.js"
-"$node" "$root/packages/agent-runtime/test/research-only.test.js"
-"$node" "$root/packages/research-qualify/test/fallback.test.js"
-"$node" "$root/packages/research-qualify/test/research-integration.test.js"
-"$node" "$root/packages/research-qualify/test/gate10-qualification.test.js"
+
+# Legacy AgentRun routing/research/stagnation suites are intentionally excluded.
+# Composer now has one active runtime: Pipeline v2 -> canonical OpenHands-style agent loop.
 "$node" "$root/packages/n8n-capability/test/capabilities.test.js"
 "$node" "$root/packages/n8n-capability/test/registry.test.js"
 "$node" "$root/packages/n8n-capability/test/foundation.test.js"
