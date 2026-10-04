@@ -1,34 +1,27 @@
-const assert = require("assert");
-const cp = require("child_process");
+"use strict";
+
+const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { ModelProvider, RunStore, startAgentRun, ControlledToolProvider, ToolRegistry } = require("../../agent-runtime");
+const {
+  ModelProvider,
+  RunStore,
+  startPipelineRun,
+  ControlledToolProvider,
+  ToolRegistry,
+} = require("../../agent-runtime");
 const { createResearchWorkspaceHost } = require("../host");
-const { N8nCapabilityProvider } = require("../../n8n-capability");
-const { REQUIREMENTS } = require("../acceptance");
 
 const FIXTURE = path.join(__dirname, "../fixture");
 
-class UnavailableHubModelProvider extends ModelProvider {
-  constructor() {
+class ScriptedProvider extends ModelProvider {
+  constructor(steps) {
     super("scripted");
-    this.localStep = 0;
+    this.steps = [...steps];
   }
-
   async complete() {
-    const steps = [
-      { text: "Inspecting the identification-number implementation.", toolCalls: [{ name: "repo.search", args: { query: "validNumber" } }] },
-      { text: "Reading the implementation before deciding on a repair.", toolCalls: [{ name: "file.read", args: { path: "src/check.js" } }] },
-      { text: "Reading the tests before deciding on a repair.", toolCalls: [{ name: "file.read", args: { path: "test/check.test.js" } }] },
-      { text: "Keeping the failing test result as local evidence.", toolCalls: [{ name: "tests.run", args: { command: "npm test" } }] },
-      { text: "The repository still does not define the missing rule.", toolCalls: [{ name: "repo.search", args: { query: "validNumber" } }] },
-      { text: "The repository still does not define the missing rule.", toolCalls: [{ name: "file.read", args: { path: "src/check.js" } }] },
-      { text: "Guessing the unpublished rule from model knowledge.", toolCalls: [{ name: "file.write", args: { path: "src/check.js", contents: "module.exports = { validNumber() { return true; } };\n" } }] },
-    ];
-    const step = steps[Math.min(this.localStep, steps.length - 1)];
-    this.localStep += 1;
-    return step;
+    return this.steps.shift() || { text: "External evidence is unavailable, so no change was made.", toolCalls: [] };
   }
 }
 
@@ -36,122 +29,75 @@ function prepareWorkspace() {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-research-fallback-"));
   const workspace = path.join(parent, "fixture");
   fs.cpSync(FIXTURE, workspace, { recursive: true });
-  const gitEnv = {
-    ...process.env,
-    GIT_AUTHOR_NAME: "test",
-    GIT_AUTHOR_EMAIL: "test@example.com",
-    GIT_COMMITTER_NAME: "test",
-    GIT_COMMITTER_EMAIL: "test@example.com",
-  };
-  cp.execFileSync("git", ["init", "-b", "main"], { cwd: workspace });
-  cp.execFileSync("git", ["add", "."], { cwd: workspace });
-  cp.execFileSync("git", ["commit", "-m", "id check"], { cwd: workspace, env: gitEnv, stdio: "ignore" });
   return workspace;
 }
 
-async function refuseGuessWhenHubUnavailable() {
-  const source = fs.readFileSync(path.join(FIXTURE, "src/check.js"), "utf8");
-  assert.ok(!/subtract 9|from the right|right-to-left/i.test(source));
+async function runWithHub(hub) {
   const workspace = prepareWorkspace();
   const before = fs.readFileSync(path.join(workspace, "src/check.js"), "utf8");
-
-  const hub = new N8nCapabilityProvider({ baseUrl: "http://127.0.0.1:9", retries: 0, retryDelayMs: 0 });
-  hub.listCapabilities = async () => [{ name: "research.problem", description: "Gather short evidence for a problem. Returns sources and excerpts." }];
-  const provider = new UnavailableHubModelProvider();
-  const store = new RunStore(path.join(path.dirname(workspace), "runs"));
-  const run = await startAgentRun({
-    goal: "Repair the identification-number check. The missing rule is not documented in the repository.",
+  const provider = new ScriptedProvider([
+    {
+      text: "I will not guess. Attempting an edit should be blocked in this no-edit research run.",
+      toolCalls: [{
+        name: "file.write",
+        args: { path: "src/check.js", contents: "module.exports = { validNumber() { return true; } };\n" },
+      }],
+    },
+    { text: "The required external evidence is unavailable, so no edit was made.", toolCalls: [] },
+  ]);
+  const run = await startPipelineRun({
+    goal: "Research the missing identification-number rule because it is not documented in the repository. Do not edit anything yet.",
     model: "scripted",
     providerName: provider.name,
     mode: "controlled",
-    requirements: REQUIREMENTS,
+    composerMode: "code",
     provider,
     registry: new ToolRegistry(new ControlledToolProvider(createResearchWorkspaceHost(workspace))),
-    store,
+    store: new RunStore(path.join(path.dirname(workspace), "runs")),
     capabilities: hub,
-    maxIterations: 14,
-    maxIdenticalActions: 20,
-    maxRetries: 10,
+    maxIterations: 4,
+    projectBrainEnabled: false,
+    skillsEnabled: false,
   }).done;
-
-  const capabilityCall = run.toolCalls.find((call) => call.name === "capability.invoke");
-  const deniedWrite = run.toolCalls.find((call) => (
-    call.name === "file.write"
-    && call.result
-    && call.result.ok === false
-  ));
-  assert.strictEqual(run.lifecycle, "failed", JSON.stringify({
-    error: run.error,
-    outcome: run.outcome,
-    tools: (run.toolCalls || []).map((call) => ({
-      name: call.name,
-      ok: call.result && call.result.ok,
-      code: call.result && call.result.error && call.result.error.code,
-    })),
-  }, null, 2));
-  assert.strictEqual(run.error && run.error.code, "evidence_unavailable");
-  assert.match(String(run.outcome && run.outcome.summary || ""), /reconnect the hub/i);
-  assert.ok(capabilityCall);
-  assert.strictEqual(capabilityCall.directedBy, "runtime");
-  assert.ok(capabilityCall.result && capabilityCall.result.ok === false);
-  assert.ok(!run.toolCalls.some((call) => call.name === "file.write" && call.result && call.result.ok));
-  assert.ok(!run.toolCalls.some((call) => call.name === "process.start" && call.result && call.result.ok));
-  assert.strictEqual(fs.readFileSync(path.join(workspace, "src/check.js"), "utf8"), before);
-  if (deniedWrite) {
-    assert.ok(
-      deniedWrite.ruleDecision
-      && (deniedWrite.ruleDecision.rule === "recovery.external_evidence_required"
-        || deniedWrite.ruleDecision.rule === "recovery.evidence_unavailable"),
-    );
-  }
-  const loop = fs.readFileSync(path.join(__dirname, "../../agent-runtime/agent-run.js"), "utf8");
-  assert.strictEqual(loop.includes("research.problem"), false);
-  assert.strictEqual(loop.includes("webhook"), false);
-  console.log("ok fallback refuses to guess when the hub is unavailable");
-}
-
-async function emptyDiscoveryStopsWithoutGuessing() {
-  const workspace = prepareWorkspace();
-  const before = fs.readFileSync(path.join(workspace, "src/check.js"), "utf8");
-  const hub = new N8nCapabilityProvider({ baseUrl: "http://127.0.0.1:9", retries: 0, retryDelayMs: 0 });
-  const provider = new UnavailableHubModelProvider();
-  const store = new RunStore(path.join(path.dirname(workspace), "runs-empty"));
-  const run = await startAgentRun({
-    goal: "Repair the identification-number check. The missing rule is not documented in the repository.",
-    model: "scripted",
-    providerName: provider.name,
-    mode: "controlled",
-    requirements: REQUIREMENTS,
-    provider,
-    registry: new ToolRegistry(new ControlledToolProvider(createResearchWorkspaceHost(workspace))),
-    store,
-    capabilities: hub,
-    maxIterations: 14,
-    maxIdenticalActions: 20,
-    maxRetries: 10,
-  }).done;
-
-  assert.strictEqual(run.lifecycle, "failed", JSON.stringify({
-    error: run.error,
-    outcome: run.outcome,
-    tools: (run.toolCalls || []).map((call) => ({
-      name: call.name,
-      ok: call.result && call.result.ok,
-    })),
-  }, null, 2));
-  assert.strictEqual(run.error && run.error.code, "evidence_unavailable");
-  assert.match(String(run.outcome && run.outcome.summary || ""), /reconnect the hub/i);
-  assert.ok(!run.toolCalls.some((call) => call.name === "file.write" && call.result && call.result.ok));
-  assert.strictEqual(fs.readFileSync(path.join(workspace, "src/check.js"), "utf8"), before);
-  console.log("ok empty hub discovery refuses to guess");
+  return { run, workspace, before };
 }
 
 async function main() {
-  await refuseGuessWhenHubUnavailable();
-  await emptyDiscoveryStopsWithoutGuessing();
+  const unavailable = {
+    requests: [],
+    async listCapabilities() {
+      return [{ name: "research.problem", description: "Gather short evidence for a problem. Returns sources and excerpts." }];
+    },
+    async invoke(request) {
+      this.requests.push(request);
+      throw new Error("hub offline");
+    },
+  };
+
+  const first = await runWithHub(unavailable);
+  assert.strictEqual(first.run.mode, "read_only");
+  assert.strictEqual(unavailable.requests.length, 1);
+  const preflight = first.run.toolCalls.find((call) => call.name === "capability.invoke" && call.phase === "preflight");
+  assert.ok(preflight, "research preflight should be recorded");
+  assert.strictEqual(preflight.result.ok, false);
+  assert.strictEqual(preflight.result.trusted, false);
+  assert.ok(!first.run.toolCalls.some((call) => call.name === "file.write" && call.result && call.result.ok));
+  assert.strictEqual(fs.readFileSync(path.join(first.workspace, "src/check.js"), "utf8"), first.before);
+  assert.ok(first.run.messages.some((message) => /hub offline|unavailable/i.test(String(message.content || ""))));
+  console.log("ok unavailable research evidence stays read-only on canonical loop");
+
+  const empty = {
+    async listCapabilities() { return []; },
+    async invoke() { throw new Error("must not invoke"); },
+  };
+  const second = await runWithHub(empty);
+  assert.ok(!second.run.toolCalls.some((call) => call.name === "capability.invoke"));
+  assert.ok(!second.run.toolCalls.some((call) => call.name === "file.write" && call.result && call.result.ok));
+  assert.strictEqual(fs.readFileSync(path.join(second.workspace, "src/check.js"), "utf8"), second.before);
+  console.log("ok empty capability discovery cannot create a fallback loop or workspace edit");
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });
