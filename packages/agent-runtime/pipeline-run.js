@@ -9,6 +9,12 @@ const {
 const { buildModelContext } = require("./pipeline-context");
 const { instructionsForMode } = require("./pipeline-instructions");
 const { runPipeline } = require("./pipeline-loop");
+const { capabilityIntent } = require("./progress");
+const {
+  capabilityInput,
+  chooseCapabilityPreflight,
+  capabilityBrief,
+} = require("./capability-preflight");
 const {
   addRequirement: brainAddRequirement,
   addDecision: brainAddDecision,
@@ -115,6 +121,7 @@ function recordTool(run, call, result, directedBy) {
     args: call.args || {},
     result,
     ...(directedBy ? { directedBy } : {}),
+    ...(call && call.phase ? { phase: call.phase } : {}),
   };
   run.toolCalls.push(record);
   run.observations.push({
@@ -521,7 +528,13 @@ async function executePipelineRun(run, options, followUpQueue) {
     }
   }
 
-  const allowExternalEvidence = run.mode !== "read_only" || readOnlyNeedsExternalEvidence(run.goal);
+  const capabilityRequested = Boolean(capabilityIntent(run.goal, {
+    composerMode: run.composerMode,
+    taskClass: run.taskClass,
+  }));
+  const allowExternalEvidence = run.mode !== "read_only"
+    || readOnlyNeedsExternalEvidence(run.goal)
+    || capabilityRequested;
 
   let capabilityRegistry = null;
   let capabilityDefinitions = [];
@@ -529,6 +542,64 @@ async function executePipelineRun(run, options, followUpQueue) {
     capabilityRegistry = await loadCapabilityRegistry(options.capabilities);
     const listed = capabilityRegistry.list();
     if (listed.length) capabilityDefinitions = capabilityToolDefinitions(listed);
+
+    const alreadyRanPreflight = (run.toolCalls || []).some((call) => (
+      call
+      && call.name === "capability.invoke"
+      && call.directedBy === "runtime"
+      && call.phase === "preflight"
+    ));
+    if (!alreadyRanPreflight) {
+      const selected = chooseCapabilityPreflight(run, listed);
+      if (selected && selected.name) {
+        const question = String(run.goal || "").replace(/\s+/g, " ").trim().slice(0, 1500);
+        const call = {
+          id: "call_" + crypto.randomBytes(4).toString("hex"),
+          name: "capability.invoke",
+          args: {
+            capability: selected.name,
+            input: capabilityInput(selected, question),
+          },
+          phase: "preflight",
+        };
+        let result;
+        try {
+          result = await dispatchCapability(options.capabilities, run, call, signal, capabilityRegistry);
+        } catch (error) {
+          result = {
+            ok: false,
+            kind: "capability",
+            trusted: false,
+            tool: call.name,
+            capability: selected.name,
+            status: "unavailable",
+            error: {
+              code: "capability_unavailable",
+              message: error instanceof Error ? error.message : String(error),
+            },
+          };
+        }
+        if (result && typeof result === "object") result.directedBy = "runtime";
+        recordTool(run, call, result, "runtime");
+        run.capabilityPreflight = {
+          capability: selected.name,
+          ok: Boolean(result && result.ok),
+          status: String(result && result.status || (result && result.ok ? "ok" : "error")),
+        };
+        run.events.push({
+          type: "capability_preflight",
+          capability: selected.name,
+          ok: Boolean(result && result.ok),
+          trusted: false,
+          at: new Date().toISOString(),
+        });
+        projectRules = [
+          projectRules,
+          capabilityBrief(selected, run.goal, result),
+        ].filter(Boolean).join("\n\n");
+        store.save(run);
+      }
+    }
   }
 
   let externalDefinitions = [];
