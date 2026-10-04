@@ -35,4 +35,35 @@ assert.ok(pipeline.includes('name: "openhands-agent"'));
 assert.ok(pipeline.includes('loop: "openhands-event-step-v1"'));
 assert.ok(!pipeline.includes('require("./agent-run")'));
 
+function walkJavaScript(root) {
+  const files = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "code-oss") continue;
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) files.push(...walkJavaScript(full));
+    else if (/\.(?:js|mjs|cjs)$/.test(entry.name)) files.push(full);
+  }
+  return files;
+}
+
+const forbidden = [
+  { pattern: /\bstartAgentRun\b/, label: "startAgentRun" },
+  { pattern: /\bresumeRun\b/, label: "resumeRun" },
+  { pattern: /CODEME_AGENT_PIPELINE/, label: "CODEME_AGENT_PIPELINE" },
+  { pattern: /agent-run\.js/, label: "agent-run.js" },
+];
+
+for (const base of [path.join(repoRoot, "packages"), path.join(repoRoot, "extensions")]) {
+  for (const file of walkJavaScript(base)) {
+    if (file === __filename) continue;
+    const source = fs.readFileSync(file, "utf8");
+    for (const item of forbidden) {
+      assert.ok(
+        !item.pattern.test(source),
+        item.label + " must not appear in executable CodeMe source: " + path.relative(repoRoot, file),
+      );
+    }
+  }
+}
+
 console.log("ok OpenHands event-step loop is the only executable CodeMe agent loop");
