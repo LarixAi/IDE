@@ -1234,6 +1234,248 @@ function renderComposer(nonce) {
         display: none;
       }
     }
+
+    /* Cursor-reference Composer V22
+       Final visual override: one clearly outlined input surface with a quiet
+       bottom control row. Existing CodeMe mode/model/tool behavior is unchanged. */
+    footer {
+      padding: 34px 14px 14px;
+      background: linear-gradient(transparent, #1e1e1e 28%);
+    }
+
+    .unified-composer {
+      min-height: 178px;
+      border: 1px solid #4b4b4b;
+      border-radius: 21px;
+      background: #1f1f1f;
+      box-shadow: none;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    .unified-composer:focus-within {
+      border-color: #5b5b5b;
+      background: #202020;
+    }
+
+    .unified-composer textarea {
+      min-height: 116px;
+      max-height: 220px;
+      padding: 20px 20px 10px;
+      color: #ededed;
+      font-size: 14px;
+      line-height: 1.5;
+      letter-spacing: 0;
+    }
+
+    .unified-composer textarea::placeholder {
+      color: #6f6f6f;
+      opacity: 1;
+    }
+
+    .unified-composer .chips {
+      padding: 0 18px 4px;
+    }
+
+    .unified-composer .unified-composer-bar {
+      min-height: 48px;
+      gap: 10px;
+      padding: 6px 13px 12px 18px;
+      border: 0;
+      background: transparent;
+    }
+
+    .composer-left {
+      flex: 1 1 auto;
+      gap: 14px;
+    }
+
+    .composer-right {
+      flex: 0 0 auto;
+      gap: 5px;
+      margin-left: auto;
+    }
+
+    .unified-composer .bar button,
+    .unified-composer .bar select {
+      height: 34px;
+      color: #b7b7b7;
+      font-size: 12px;
+    }
+
+    .unified-composer #mode {
+      width: 104px;
+      max-width: 104px;
+      height: 34px;
+      padding: 0 28px 0 15px;
+      border-radius: 18px;
+      background-color: #343434;
+      color: #d0d0d0;
+      font-size: 12px;
+      font-weight: 600;
+      background-position:
+        calc(100% - 14px) 14px,
+        calc(100% - 10px) 14px;
+    }
+
+    .unified-composer #model {
+      flex: 1 1 190px;
+      min-width: 120px;
+      max-width: 300px;
+      padding: 0;
+      appearance: none;
+      background: transparent;
+      color: #e0e0e0;
+      font-size: 13px;
+      font-weight: 450;
+    }
+
+    .model-lock-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 22px;
+      margin-left: -7px;
+      color: #7e7e7e;
+      pointer-events: none;
+    }
+
+    .model-lock-icon svg {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .unified-composer #hub-tools-button,
+    .unified-composer #model-refresh {
+      display: none;
+    }
+
+    .unified-composer #attach,
+    .unified-composer #mic {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 19px;
+      background: transparent;
+      color: #a9a9a9;
+    }
+
+    .unified-composer #attach:hover,
+    .unified-composer #mic:hover {
+      background: #2b2b2b;
+      color: #dedede;
+    }
+
+    .unified-composer #attach svg,
+    .unified-composer #mic svg {
+      width: 23px;
+      height: 23px;
+      stroke-width: 1.7;
+    }
+
+    .unified-composer #mic {
+      background: #353535;
+      color: #d0d0d0;
+    }
+
+    .unified-composer #mic:hover {
+      background: #414141;
+      color: #eeeeee;
+    }
+
+    .unified-composer #send,
+    .unified-composer #stop {
+      width: 38px;
+      height: 38px;
+      flex-basis: 38px;
+      border-radius: 19px;
+    }
+
+    .unified-composer #send {
+      display: none;
+      background: #e5e5e5;
+      color: #111111;
+      box-shadow: none;
+    }
+
+    .unified-composer.has-text #send {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .unified-composer.has-text #mic {
+      display: none;
+    }
+
+    .unified-composer .v19-compose-status {
+      left: 18px;
+      bottom: 51px;
+    }
+
+    @media (max-width: 470px) {
+      footer {
+        padding: 28px 9px 9px;
+      }
+
+      .unified-composer {
+        min-height: 160px;
+        border-radius: 18px;
+      }
+
+      .unified-composer textarea {
+        min-height: 98px;
+        padding: 17px 15px 8px;
+        font-size: 13px;
+      }
+
+      .unified-composer .unified-composer-bar {
+        gap: 5px;
+        padding: 5px 8px 9px 12px;
+      }
+
+      .composer-left {
+        gap: 7px;
+      }
+
+      .unified-composer #mode {
+        width: 88px;
+        max-width: 88px;
+        padding-left: 12px;
+        font-size: 11px;
+      }
+
+      .unified-composer #model {
+        min-width: 72px;
+        max-width: none;
+        font-size: 11px;
+      }
+
+      .model-lock-icon {
+        display: none;
+      }
+
+      .unified-composer #attach,
+      .unified-composer #mic,
+      .unified-composer #send,
+      .unified-composer #stop {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+      }
+
+      .unified-composer #attach svg,
+      .unified-composer #mic svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
 </style>
 </head>
 <body>
@@ -1282,7 +1524,7 @@ function renderComposer(nonce) {
           <div class="hub-flags" id="hub-flags"></div>
           <div class="hub-tools" id="hub-tool-list"></div>
         </div>
-        <textarea id="prompt" placeholder="Ask CodeMe anything, @ files or type /" rows="3"></textarea>
+        <textarea id="prompt" placeholder="Plan, Build, / for skills, @ for context" rows="3"></textarea>
         <div class="chips" id="chips"></div>
         <div class="v19-compose-status" id="v19-compose-status">
           <span class="v19-state-pill">
@@ -1411,10 +1653,15 @@ function renderComposer(nonce) {
         sendPrompt();
       }
     });
+    function syncComposerInputState() {
+      drop.classList.toggle("has-text", Boolean(prompt.value.trim()) || Boolean(chips.childElementCount));
+    }
     prompt.addEventListener("input", () => {
       prompt.style.height = "auto";
-      prompt.style.height = Math.min(180, prompt.scrollHeight) + "px";
+      prompt.style.height = Math.min(220, prompt.scrollHeight) + "px";
+      syncComposerInputState();
     });
+    syncComposerInputState();
     send.addEventListener("click", sendPrompt);
     stop.addEventListener("click", () => vscode.postMessage({ type: "cancel", requestId }));
     document.getElementById("attach").addEventListener("click", () => vscode.postMessage({ type: "pick" }));
@@ -1620,6 +1867,7 @@ function renderComposer(nonce) {
         prompt.value = "";
         prompt.style.height = "";
         draft = "";
+        syncComposerInputState();
         clearSendPending();
       }
       stage.textContent = state.stage || "Waiting";
@@ -2510,7 +2758,10 @@ function renderComposer(nonce) {
       if (message.type === "rejected" && current(message)) {
         clearSendPending();
         notice.textContent = message.message || "Could not send.";
-        if (!prompt.value && draft) prompt.value = draft;
+        if (!prompt.value && draft) {
+          prompt.value = draft;
+          syncComposerInputState();
+        }
       }
       if (message.type === "clarification-submitting" && current(message)) {
         const button = document.getElementById("clarification-continue");
