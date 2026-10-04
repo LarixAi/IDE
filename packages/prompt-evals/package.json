@@ -1,0 +1,16 @@
+{
+  "name": "codeme-prompt-evals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Promptfoo regression suite for CodeMe prompt and agent decision policies",
+  "scripts": {
+    "eval": "promptfoo eval -c promptfooconfig.yaml --no-cache --max-concurrency 1",
+    "view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "0.123.1"
+  },
+  "engines": {
+    "node": ">=22.22.0"
+  }
+}
