@@ -1235,20 +1235,27 @@ function renderComposer(nonce) {
       }
     }
 
-    /* Cursor-reference Composer V22
-       Final visual override: one clearly outlined input surface with a quiet
-       bottom control row. Existing CodeMe mode/model/tool behavior is unchanged. */
-    footer {
-      padding: 34px 14px 14px;
-      background: linear-gradient(transparent, #1e1e1e 28%);
+    /* Cursor-reference Composer V23
+       User-approved compact responsive composer layout. */
+    /* Ensure proper box model across the composer */
+    .unified-composer,
+    .unified-composer *,
+    .unified-composer *::before,
+    .unified-composer *::after {
+      box-sizing: border-box;
     }
 
     .unified-composer {
-      min-height: 178px;
+      width: 100%;
+      max-width: 100%;
+      min-height: 160px;
       border: 1px solid #4b4b4b;
       border-radius: 21px;
       background: #1f1f1f;
       box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden; /* Keeps buttons and pills inside the rounded corners */
       transition: border-color 120ms ease, background 120ms ease;
     }
 
@@ -1258,124 +1265,120 @@ function renderComposer(nonce) {
     }
 
     .unified-composer textarea {
-      min-height: 116px;
+      width: 100%;
+      min-height: 80px;
       max-height: 220px;
-      padding: 20px 20px 10px;
+      padding: 16px 18px 8px;
+      border: 0;
+      outline: 0;
+      resize: none;
+      background: transparent;
       color: #ededed;
       font-size: 14px;
       line-height: 1.5;
-      letter-spacing: 0;
+      overflow-y: auto;
     }
 
     .unified-composer textarea::placeholder {
       color: #6f6f6f;
-      opacity: 1;
     }
 
-    .unified-composer .chips {
-      padding: 0 18px 4px;
+    /* Status pill area (Ready / read-only) */
+    .unified-composer .v19-compose-status {
+      padding: 0 18px 6px;
+      display: flex;
+      align-items: center;
     }
 
+    /* Bottom action bar */
     .unified-composer .unified-composer-bar {
-      min-height: 48px;
-      gap: 10px;
-      padding: 6px 13px 12px 18px;
+      width: 100%;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 12px 10px 14px;
       border: 0;
       background: transparent;
+      margin-top: auto; /* Pins toolbar to bottom */
     }
 
+    /* Left controls: mode pill, model selector, lock */
     .composer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       flex: 1 1 auto;
-      gap: 14px;
-    }
-
-    .composer-right {
-      flex: 0 0 auto;
-      gap: 5px;
-      margin-left: auto;
-    }
-
-    .unified-composer .bar button,
-    .unified-composer .bar select {
-      height: 34px;
-      color: #b7b7b7;
-      font-size: 12px;
+      min-width: 0; /* CRITICAL: Allows flex children to shrink below content size */
+      overflow: hidden;
     }
 
     .unified-composer #mode {
-      width: 104px;
-      max-width: 104px;
-      height: 34px;
-      padding: 0 28px 0 15px;
-      border-radius: 18px;
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 76px;
+      height: 30px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 15px;
       background-color: #343434;
       color: #d0d0d0;
       font-size: 12px;
       font-weight: 600;
-      background-position:
-        calc(100% - 14px) 14px,
-        calc(100% - 10px) 14px;
+      cursor: pointer;
     }
 
     .unified-composer #model {
-      flex: 1 1 190px;
-      min-width: 120px;
-      max-width: 300px;
+      flex: 1 1 auto;
+      min-width: 0; /* Allows text to truncate when panel is narrow */
+      max-width: 100%;
       padding: 0;
+      border: 0;
       appearance: none;
       background: transparent;
       color: #e0e0e0;
       font-size: 13px;
-      font-weight: 450;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
     }
 
-    .model-lock-icon {
-      display: inline-flex;
+    .composer-left .model-lock-icon {
+      flex: 0 0 auto;
+      display: flex;
       align-items: center;
-      justify-content: center;
-      width: 15px;
-      height: 22px;
-      margin-left: -7px;
-      color: #7e7e7e;
-      pointer-events: none;
     }
 
-    .model-lock-icon svg {
-      width: 13px;
-      height: 13px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.7;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .unified-composer #hub-tools-button,
-    .unified-composer #model-refresh {
-      display: none;
+    /* Right buttons: attach, mic, stop, send */
+    .composer-right {
+      display: flex;
+      align-items: center;
+      flex: 0 0 auto;
+      gap: 4px;
+      margin-left: auto;
     }
 
     .unified-composer #attach,
-    .unified-composer #mic {
-      width: 38px;
-      height: 38px;
+    .unified-composer #mic,
+    .unified-composer #stop,
+    .unified-composer #send {
+      flex: 0 0 34px;
+      width: 34px;
+      height: 34px;
       padding: 0;
-      border-radius: 19px;
+      border: 0;
+      border-radius: 17px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .unified-composer #attach {
       background: transparent;
       color: #a9a9a9;
-    }
-
-    .unified-composer #attach:hover,
-    .unified-composer #mic:hover {
-      background: #2b2b2b;
-      color: #dedede;
-    }
-
-    .unified-composer #attach svg,
-    .unified-composer #mic svg {
-      width: 23px;
-      height: 23px;
-      stroke-width: 1.7;
     }
 
     .unified-composer #mic {
@@ -1383,97 +1386,19 @@ function renderComposer(nonce) {
       color: #d0d0d0;
     }
 
-    .unified-composer #mic:hover {
-      background: #414141;
-      color: #eeeeee;
-    }
-
-    .unified-composer #send,
-    .unified-composer #stop {
-      width: 38px;
-      height: 38px;
-      flex-basis: 38px;
-      border-radius: 19px;
-    }
-
     .unified-composer #send {
       display: none;
       background: #e5e5e5;
       color: #111111;
-      box-shadow: none;
+      font-weight: bold;
     }
 
     .unified-composer.has-text #send {
       display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
 
     .unified-composer.has-text #mic {
       display: none;
-    }
-
-    .unified-composer .v19-compose-status {
-      left: 18px;
-      bottom: 51px;
-    }
-
-    @media (max-width: 470px) {
-      footer {
-        padding: 28px 9px 9px;
-      }
-
-      .unified-composer {
-        min-height: 160px;
-        border-radius: 18px;
-      }
-
-      .unified-composer textarea {
-        min-height: 98px;
-        padding: 17px 15px 8px;
-        font-size: 13px;
-      }
-
-      .unified-composer .unified-composer-bar {
-        gap: 5px;
-        padding: 5px 8px 9px 12px;
-      }
-
-      .composer-left {
-        gap: 7px;
-      }
-
-      .unified-composer #mode {
-        width: 88px;
-        max-width: 88px;
-        padding-left: 12px;
-        font-size: 11px;
-      }
-
-      .unified-composer #model {
-        min-width: 72px;
-        max-width: none;
-        font-size: 11px;
-      }
-
-      .model-lock-icon {
-        display: none;
-      }
-
-      .unified-composer #attach,
-      .unified-composer #mic,
-      .unified-composer #send,
-      .unified-composer #stop {
-        width: 34px;
-        height: 34px;
-        flex-basis: 34px;
-      }
-
-      .unified-composer #attach svg,
-      .unified-composer #mic svg {
-        width: 20px;
-        height: 20px;
-      }
     }
 
 </style>
