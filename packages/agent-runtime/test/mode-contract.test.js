@@ -113,7 +113,7 @@ async function runAskContract() {
   assert.ok(offered.has("dir.list"));
   assert.ok(!offered.has("file.write"));
   assert.ok(!offered.has("terminal.run"));
-  assert.ok(!offered.has("browser.check"));
+  assert.ok(offered.has("browser.check"), "Read-only browser verification may remain available in Ask/Plan");
 }
 
 async function runPlanContract() {
