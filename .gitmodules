@@ -7,3 +7,8 @@
 	path = vendor/langchain-context-engineering
 	url = https://github.com/langchain-ai/context_engineering.git
 	shallow = true
+
+[submodule "vendor/learn-harness-engineering"]
+	path = vendor/learn-harness-engineering
+	url = https://github.com/walkinglabs/learn-harness-engineering.git
+	shallow = true
