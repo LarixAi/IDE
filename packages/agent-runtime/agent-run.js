@@ -4084,4 +4084,13 @@ function summarize(result) {
   return text.length > 500 ? `${text.slice(0, 500)}…` : text;
 }
 
-module.exports = { createRun, startAgentRun, resumeRun, defaultVerify, applyFollowUp };
+// Legacy execution entry points are intentionally not exported anymore.
+// Compatibility callers are forwarded into the canonical OpenHands-style
+// pipeline so there is only one active reasoning/action loop.
+module.exports = {
+  createRun,
+  startAgentRun: (options) => require("./pipeline-run").startPipelineRun(options),
+  resumeRun: (id, options) => require("./pipeline-run").resumePipelineRun(id, options),
+  defaultVerify,
+  applyFollowUp,
+};
