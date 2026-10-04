@@ -176,33 +176,1065 @@ function renderComposer(nonce) {
     .shell.over .composer { outline: 1px solid #7fc9dd88; outline-offset: 2px; background: #7fc9dd0d; }
     textarea { width: 100%; min-height: 45px; max-height: 160px; box-sizing: border-box; border: 0; resize: none; background: transparent; color: #e0e4ea; font: inherit; font-size: 12px; line-height: 1.4; padding: 7px 5px 3px; outline: none; }
     textarea::placeholder { color: #697482; }
-    .bar { display: flex; align-items: center; gap: 3px; min-width: 0; }
+    .bar { display: flex; align-items: center; gap: 3px; width: 100%; min-width: 0; max-width: 100%; }
+    .bar > * { min-width: 0; }
     .bar button, .bar select { border: 0; background: transparent; color: #909aa8; height: 24px; padding: 0 5px; cursor: pointer; font: inherit; font-size: 10px; border-radius: 4px; }
     .bar button:hover, .bar select:hover { background: #2a2f36; color: #d6dbe3; }
     .bar button:disabled, .bar select:disabled { opacity: 0.4; cursor: default; }
-    #attach { flex: 0 0 auto; }
-    #mode { flex: 0 0 auto; max-width: 92px; color: #b8c0cb; }
-    #model { flex: 1 1 128px; min-width: 96px; max-width: 160px; color: #b8c0cb; text-overflow: ellipsis; overflow: hidden; }
-    #model-refresh { flex: 0 0 auto; width: 22px; padding: 0; font-size: 13px; }
+    #attach, #mic, #hub-tools-button { flex: 0 0 auto; }
+    #mode { flex: 0 1 auto; max-width: 92px; color: #b8c0cb; }
+    #model { flex: 1 1 128px; min-width: 0; max-width: 160px; color: #b8c0cb; text-overflow: ellipsis; overflow: hidden; }
+    #model-refresh { flex: 0 0 22px; width: 22px; padding: 0; font-size: 13px; }
     #model-refresh.loading { animation: codeme-spin 0.8s linear infinite; }
     @keyframes codeme-spin { to { transform: rotate(360deg); } }
-    #send { margin-left: auto; width: 24px; padding: 0; border-radius: 6px; background: #7fc9dd; color: #172027; font-size: 14px; font-weight: 700; }
+    #send { flex: 0 0 24px; margin-left: auto; width: 24px; padding: 0; border-radius: 6px; background: #7fc9dd; color: #172027; font-size: 14px; font-weight: 700; }
     #send:hover { background: #91d7e8; color: #172027; }
     #send:disabled { opacity: 0.35; }
-    #stop { width: 24px; padding: 0; color: #aab3bf; }
+    #stop { flex: 0 0 24px; width: 24px; padding: 0; color: #aab3bf; }
     #send[hidden], #stop[hidden] { display: none; }
     #mic.on { color: #ff918b; }
     .perm { display: none; }
 
-    @media (max-width: 310px) {
+    /* The chat view is a resizable Code - OSS sidebar. Mirror the V19 mock:
+       compact controls first, then move the model picker to its own row so
+       send/stop never disappear when the pane becomes narrow. */
+    @media (max-width: 380px) {
       .workspace-actions { display: none; }
+      #history-toggle { width: 22px; min-width: 22px; padding: 0; overflow: hidden; font-size: 0; }
+      #history-toggle::before { content: "☰"; font-size: 13px; }
+      .bar {
+        display: grid;
+        grid-template-columns: 26px 30px 30px minmax(0, 1fr) 24px 24px;
+        grid-template-rows: 24px 24px;
+        gap: 3px;
+        width: 100%;
+      }
+      #attach { grid-column: 1; grid-row: 1; width: 26px; padding: 0; overflow: hidden; font-size: 0; }
+      #attach::before { content: "＋"; font-size: 14px; }
+      #mic { grid-column: 2; grid-row: 1; width: 30px; padding: 0; overflow: hidden; font-size: 0; }
+      #mic::before { content: "●"; font-size: 9px; }
+      #mic.on::before { content: "■"; }
+      #hub-tools-button { grid-column: 3; grid-row: 1; width: 30px; padding: 0; }
+      #mode { grid-column: 4; grid-row: 1; width: 100%; max-width: none; }
+      #stop { grid-column: 5; grid-row: 1; margin: 0; }
+      #send { grid-column: 6; grid-row: 1; margin: 0; }
+      #model { grid-column: 1 / 6; grid-row: 2; width: 100%; min-width: 0; max-width: none; }
+      #model-refresh { grid-column: 6; grid-row: 2; }
+      .hub-panel { bottom: 59px; }
     }
     @media (max-width: 230px) {
       h1 { display: none; }
-      #model { max-width: 86px; }
-      #attach { width: 24px; overflow: hidden; white-space: nowrap; }
+      .history-panel { left: 4px; right: 4px; }
     }
-  </style>
+  
+    /* V19 native Composer skin
+       Keep the real Composer DOM/runtime and match the approved V19 chat design. */
+    body {
+      background: #1e1e1e;
+      color: #cccccc;
+    }
+    .shell {
+      background: #1e1e1e;
+    }
+    header {
+      min-height: 46px;
+      padding: 0 10px 0 14px;
+      border-bottom: 1px solid #292929;
+      background: #1e1e1e;
+    }
+    .title-tools {
+      gap: 4px;
+    }
+    h1 {
+      margin-right: auto;
+      color: #dddddd;
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .workspace-actions {
+      display: none;
+    }
+    .header-action {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      padding: 0;
+      border-radius: 5px;
+      color: #999999;
+      font-size: 16px;
+    }
+    .header-action:hover {
+      background: #292929;
+      color: #dddddd;
+    }
+    #new-chat {
+      font-size: 18px;
+    }
+    #history-toggle {
+      font-size: 0;
+    }
+    #history-toggle::before {
+      content: "☰";
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .history-panel {
+      top: 43px;
+      left: auto;
+      right: 8px;
+      width: min(285px, calc(100% - 16px));
+      max-height: 420px;
+      border: 1px solid #414141;
+      border-radius: 8px;
+      background: #242424;
+      box-shadow: 0 12px 32px #000a;
+    }
+    .history-head {
+      min-height: 34px;
+      border-bottom-color: #343434;
+      color: #aaaaaa;
+      font-size: 10px;
+    }
+    .history-list {
+      padding: 6px;
+    }
+    .history-item {
+      padding: 8px;
+      border-radius: 5px;
+    }
+    .history-item:hover {
+      background: #303030;
+    }
+
+    .thread {
+      padding: 16px 16px 210px;
+      scroll-padding-bottom: 210px;
+      background: #1e1e1e;
+    }
+    .empty {
+      margin: 36px 0;
+      color: #888888;
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: center;
+    }
+    .empty strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #dddddd;
+      font-size: 17px;
+      font-weight: 650;
+    }
+    .bubble {
+      line-height: 1.5;
+    }
+    .bubble.user {
+      width: fit-content;
+      max-width: 92%;
+      margin: 0 0 18px auto;
+      padding: 10px 12px;
+      border: 1px solid #373737;
+      border-radius: 9px;
+      background: #292929;
+      color: #eeeeee;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .bubble.assistant {
+      margin: 5px 0 18px;
+      color: #d0d0d0;
+    }
+    .bubble.assistant code {
+      background: #252525;
+    }
+    .bubble.assistant pre,
+    .tool-detail,
+    .code-preview {
+      background: #181818;
+      border-left-color: #3a3a3a;
+    }
+
+    .activity.on {
+      margin: 5px 0 10px;
+      color: #cfcfcf;
+    }
+    .activity.on::before {
+      color: #d2aa66;
+    }
+    .work-panel > summary {
+      color: #858585;
+    }
+    .tool-card summary:hover {
+      background: #252525;
+    }
+
+    footer {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 12;
+      padding: 28px 13px 13px;
+      background: linear-gradient(transparent, #1e1e1e 24%);
+    }
+    .v19-compose-status {
+      min-height: 25px;
+      display: flex;
+      align-items: center;
+      margin: 0 0 2px 1px;
+      color: #999999;
+      font-size: 10px;
+    }
+    .v19-state-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 7px;
+      border: 1px solid #383838;
+      border-radius: 10px;
+      background: #222222;
+    }
+    .v19-state-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #858585;
+    }
+    .v19-compose-status.reading .v19-state-pill {
+      color: #a9c5e6;
+      border-color: #34465a;
+    }
+    .v19-compose-status.reading .v19-state-dot {
+      background: #86afe0;
+    }
+    .v19-compose-status.editing .v19-state-pill {
+      color: #cbb7e9;
+      border-color: #493d5b;
+    }
+    .v19-compose-status.editing .v19-state-dot {
+      background: #b89ae5;
+    }
+    .v19-compose-status.running .v19-state-pill {
+      color: #ddbd86;
+      border-color: #57492f;
+    }
+    .v19-compose-status.running .v19-state-dot {
+      background: #d2aa66;
+      animation: codeme-pulse 1.1s ease-in-out infinite;
+    }
+    .v19-compose-status.verified .v19-state-pill {
+      color: #91d2a4;
+      border-color: #34513d;
+    }
+    .v19-compose-status.verified .v19-state-dot {
+      background: #72c58b;
+    }
+    .v19-compose-status.error .v19-state-pill {
+      color: #e1a0a0;
+      border-color: #593737;
+    }
+    .v19-compose-status.error .v19-state-dot {
+      background: #dc7e7e;
+    }
+    .v19-compose-status.waiting .v19-state-pill {
+      color: #e1c889;
+      border-color: #5a4c30;
+    }
+    .v19-compose-status.waiting .v19-state-dot {
+      background: #e0bc67;
+    }
+
+    .composer {
+      overflow: visible;
+      padding: 0;
+      border: 1px solid #3b3b3b;
+      border-radius: 9px;
+      background: #242424;
+      box-shadow: 0 8px 22px #0007;
+    }
+    .composer textarea {
+      min-height: 72px;
+      max-height: 180px;
+      padding: 11px;
+      color: #eeeeee;
+      font-size: 12px;
+    }
+    .composer textarea::placeholder {
+      color: #777777;
+    }
+    .bar {
+      gap: 6px;
+      padding: 7px;
+      border-top: 1px solid #323232;
+    }
+    .bar button,
+    .bar select {
+      height: 28px;
+      padding: 0 8px;
+      border: 1px solid #3a3a3a;
+      border-radius: 5px;
+      background: #292929;
+      color: #bbbbbb;
+      font-size: 10px;
+    }
+    .bar button:hover,
+    .bar select:hover {
+      border-color: #4a4a4a;
+      background: #303030;
+      color: #dddddd;
+    }
+    #attach {
+      width: 28px;
+      flex: 0 0 28px;
+      padding: 0;
+      font-size: 15px;
+    }
+    #mic,
+    #hub-tools-button {
+      width: auto;
+      flex: 0 0 auto;
+    }
+    #mode {
+      flex: 0 0 auto;
+      width: auto;
+      max-width: 82px;
+      color: #cccccc;
+    }
+    #model {
+      flex: 1 1 120px;
+      max-width: none;
+      color: #aaaaaa;
+    }
+    #model-refresh {
+      width: 28px;
+      flex: 0 0 28px;
+      padding: 0;
+    }
+    #send {
+      width: 29px;
+      height: 29px;
+      flex: 0 0 29px;
+      margin-left: 0;
+      padding: 0;
+      border-color: #e5e5e5;
+      background: #e5e5e5;
+      color: #111111;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    #send:hover {
+      background: #f2f2f2;
+      color: #111111;
+    }
+    #stop {
+      width: 29px;
+      flex: 0 0 29px;
+      padding: 0;
+    }
+    .notice {
+      color: #c9a45c;
+    }
+    .chips {
+      margin-bottom: 6px;
+    }
+    .chip {
+      padding: 5px 7px;
+      border: 1px solid #3b3b3b;
+      border-radius: 5px;
+      background: #2b2b2b;
+      color: #bbbbbb;
+    }
+    .changed-files {
+      border-top-color: #303030;
+    }
+
+    .hub-panel {
+      bottom: 42px;
+      border-color: #414141;
+      background: #242424;
+      box-shadow: 0 10px 30px #000a;
+    }
+
+
+    /* V19 composer toolbar refinement */
+    .composer {
+      border-radius: 12px;
+      background: #232323;
+      box-shadow: 0 10px 28px #0007;
+    }
+    .composer textarea {
+      min-height: 64px;
+      padding: 13px 13px 8px;
+      line-height: 1.45;
+    }
+
+    /* Cursor-style control strip: utility controls left, model controls center,
+       one clear primary action at the right. */
+    .bar {
+      display: grid;
+      grid-template-columns: 30px 34px 38px 72px minmax(112px, 1fr) 28px 34px;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 8px 8px;
+      border-top: 0;
+    }
+    .bar button,
+    .bar select {
+      min-width: 0;
+      height: 28px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #9a9a9a;
+      font-size: 10px;
+      box-shadow: none;
+    }
+    .bar button:hover,
+    .bar select:hover {
+      background: #2d2d2d;
+      color: #dddddd;
+    }
+
+    #attach {
+      width: 30px;
+      padding: 0;
+      color: #a7a7a7;
+      font-size: 18px;
+    }
+
+    #mic {
+      width: 34px;
+      padding: 0;
+      font-size: 0;
+    }
+    #mic::before {
+      content: "Mic";
+      font-size: 9px;
+    }
+
+    #hub-tools-button {
+      width: 38px;
+      padding: 0;
+      color: #8f9aa4;
+      font-size: 9px;
+    }
+
+    #mode {
+      width: 72px;
+      max-width: none;
+      padding: 0 20px 0 7px;
+      background-color: transparent;
+      color: #c4c4c4;
+      font-weight: 500;
+    }
+
+    #model {
+      width: 100%;
+      max-width: none;
+      min-width: 0;
+      padding: 0 20px 0 7px;
+      background-color: transparent;
+      color: #9d9d9d;
+    }
+
+    #model-refresh {
+      width: 28px;
+      padding: 0;
+      color: #858585;
+      font-size: 14px;
+    }
+
+    #send,
+    #stop {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      margin: 0;
+      border-radius: 9px;
+    }
+
+    #send {
+      align-self: end;
+      border: 0;
+      background: #e7e7e7;
+      color: #111111;
+      font-size: 19px;
+      font-weight: 700;
+      box-shadow: 0 1px 0 #ffffff33;
+    }
+    #send:hover {
+      background: #ffffff;
+      color: #111111;
+    }
+
+    #stop {
+      border: 1px solid #414141;
+      background: #2a2a2a;
+      color: #bbbbbb;
+    }
+
+    /* Give the toolbar a subtle visual split without boxing every control. */
+    #mode {
+      border-left: 1px solid #343434;
+      border-radius: 0 6px 6px 0;
+    }
+
+    @media (max-width: 470px) {
+      .composer textarea {
+        min-height: 60px;
+      }
+      .bar {
+        grid-template-columns: 30px 34px 38px minmax(68px, 1fr) 28px 34px;
+        grid-template-rows: 28px 28px;
+        gap: 4px;
+      }
+      #attach { grid-column: 1; grid-row: 1; }
+      #mic { grid-column: 2; grid-row: 1; width: 34px; }
+      #hub-tools-button { grid-column: 3; grid-row: 1; width: 38px; }
+      #mode { grid-column: 4; grid-row: 1; width: 100%; }
+      #model-refresh { grid-column: 5; grid-row: 1; }
+      #send, #stop { grid-column: 6; grid-row: 1; }
+      #model {
+        grid-column: 1 / 7;
+        grid-row: 2;
+        width: 100%;
+        padding-left: 8px;
+        border-top: 1px solid #303030;
+        border-radius: 0;
+      }
+      .hub-panel {
+        bottom: 66px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      header {
+        min-height: 42px;
+        padding-left: 10px;
+      }
+      .thread {
+        padding: 12px 11px 250px;
+        scroll-padding-bottom: 250px;
+      }
+      footer {
+        padding: 24px 8px 8px;
+      }
+      .bar {
+        display: grid;
+        grid-template-columns: 28px 34px 34px minmax(0, 1fr) 28px 29px;
+        grid-template-rows: 28px 28px;
+        gap: 5px;
+      }
+      #attach { grid-column: 1; grid-row: 1; }
+      #mic { grid-column: 2; grid-row: 1; width: 34px; padding: 0; font-size: 0; }
+      #mic::before { content: "Mic"; font-size: 9px; }
+      #hub-tools-button { grid-column: 3; grid-row: 1; width: 34px; padding: 0; }
+      #mode { grid-column: 4; grid-row: 1; width: 100%; max-width: none; }
+      #model-refresh { grid-column: 5; grid-row: 1; }
+      #send, #stop { grid-column: 6; grid-row: 1; }
+      #model { grid-column: 1 / 7; grid-row: 2; width: 100%; max-width: none; }
+    }
+  
+    /* Unified Composer V20 — one rounded card with every control inside. */
+    .unified-composer {
+      display: grid;
+      grid-template-rows: auto auto auto;
+      overflow: visible;
+      padding: 0;
+      border: 1px solid #434343;
+      border-radius: 18px;
+      background: #222222;
+      box-shadow: 0 12px 34px #0008;
+    }
+    .unified-composer textarea {
+      min-height: 88px;
+      max-height: 210px;
+      padding: 18px 18px 10px;
+      border: 0;
+      background: transparent;
+      color: #eeeeee;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .unified-composer textarea::placeholder {
+      color: #6f6f6f;
+    }
+    .unified-composer .chips {
+      margin: 0;
+      padding: 0 14px 4px;
+    }
+    .unified-composer .v19-compose-status {
+      min-height: 0;
+      margin: 0;
+      padding: 0 14px 2px;
+    }
+    .unified-composer .v19-state-pill {
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 9px;
+      opacity: .82;
+    }
+    .unified-composer .unified-composer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+      padding: 7px 10px 10px;
+      border-top: 0;
+    }
+    .composer-left,
+    .composer-right {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 5px;
+    }
+    .composer-left {
+      flex: 1 1 auto;
+      overflow: hidden;
+    }
+    .composer-right {
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+    .unified-composer .bar button,
+    .unified-composer .bar select {
+      height: 30px;
+      min-width: 0;
+      border: 0;
+      background: transparent;
+      color: #9f9f9f;
+      box-shadow: none;
+    }
+    .unified-composer .bar button:hover,
+    .unified-composer .bar select:hover {
+      background: #2d2d2d;
+      color: #dddddd;
+    }
+    .unified-composer #mode {
+      flex: 0 0 auto;
+      width: auto;
+      max-width: 86px;
+      padding: 0 24px 0 9px;
+      border-radius: 14px;
+      background: #303030;
+      color: #d1d1d1;
+      font-weight: 600;
+    }
+    .unified-composer #model {
+      flex: 1 1 150px;
+      width: auto;
+      max-width: 220px;
+      padding: 0 22px 0 9px;
+      color: #c5c5c5;
+      font-size: 11px;
+    }
+    .unified-composer #hub-tools-button {
+      width: 34px;
+      padding: 0;
+      font-size: 0;
+    }
+    .unified-composer #hub-tools-button::before {
+      content: "⋯";
+      font-size: 18px;
+      line-height: 1;
+    }
+    .unified-composer #model-refresh {
+      width: 30px;
+      padding: 0;
+      font-size: 14px;
+    }
+    .unified-composer #attach {
+      width: 32px;
+      padding: 0;
+      font-size: 18px;
+    }
+    .unified-composer #mic {
+      width: 38px;
+      padding: 0;
+      font-size: 0;
+    }
+    .unified-composer #mic::before {
+      content: "Mic";
+      font-size: 9px;
+    }
+    .unified-composer #send,
+    .unified-composer #stop {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      margin: 0;
+      border-radius: 12px;
+    }
+    .unified-composer #send {
+      background: #ececec;
+      color: #111111;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .unified-composer #send:hover {
+      background: #ffffff;
+      color: #111111;
+    }
+    .unified-composer #stop {
+      border: 1px solid #444444;
+      background: #2a2a2a;
+      color: #cccccc;
+    }
+    .unified-composer .hub-panel {
+      bottom: 48px;
+    }
+
+    @media (max-width: 470px) {
+      .unified-composer {
+        border-radius: 16px;
+      }
+      .unified-composer textarea {
+        min-height: 78px;
+        padding: 15px 14px 8px;
+      }
+      .unified-composer .unified-composer-bar {
+        align-items: flex-end;
+        gap: 6px;
+        padding: 6px 8px 8px;
+      }
+      .composer-left {
+        flex: 1 1 auto;
+        gap: 3px;
+      }
+      .composer-right {
+        gap: 3px;
+      }
+      .unified-composer #mode {
+        max-width: 72px;
+        padding-left: 7px;
+        padding-right: 18px;
+      }
+      .unified-composer #model {
+        max-width: none;
+        min-width: 0;
+        padding-left: 7px;
+        padding-right: 18px;
+      }
+      .unified-composer #hub-tools-button,
+      .unified-composer #model-refresh {
+        display: none;
+      }
+      .unified-composer #attach {
+        width: 30px;
+      }
+      .unified-composer #mic {
+        width: 32px;
+      }
+      .unified-composer #send,
+      .unified-composer #stop {
+        width: 34px;
+        height: 34px;
+      }
+    }
+
+    /* Unified Composer V21 — compact Cursor-style control layout. */
+    .unified-composer {
+      position: relative;
+      min-height: 154px;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      border: 1px solid #434343;
+      border-radius: 17px;
+      background: #202020;
+      box-shadow: 0 10px 30px #0007;
+    }
+
+    .unified-composer textarea {
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 92px;
+      max-height: 170px;
+      padding: 17px 18px 8px;
+      border: 0;
+      outline: 0;
+      resize: none;
+      background: transparent;
+      color: #eeeeee;
+      font-size: 13px;
+      line-height: 1.48;
+    }
+
+    .unified-composer textarea::placeholder {
+      color: #707070;
+    }
+
+    .unified-composer .chips {
+      padding: 0 14px 4px;
+    }
+
+    /* Idle status should not consume a permanent row. Show it only when
+       CodeMe has something meaningful to report. */
+    .unified-composer .v19-compose-status {
+      position: absolute;
+      left: 14px;
+      bottom: 47px;
+      z-index: 2;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      pointer-events: none;
+    }
+
+    .unified-composer .v19-compose-status.ready {
+      display: none;
+    }
+
+    .unified-composer .v19-state-pill {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #252525;
+      font-size: 9px;
+      opacity: .92;
+    }
+
+    .unified-composer .unified-composer-bar {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-width: 0;
+      gap: 8px;
+      margin-top: auto;
+      padding: 5px 10px 10px;
+      border: 0;
+    }
+
+    .composer-left,
+    .composer-right {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .composer-left {
+      flex: 1 1 auto;
+      gap: 7px;
+      overflow: hidden;
+    }
+
+    .composer-right {
+      flex: 0 0 auto;
+      gap: 3px;
+      margin-left: auto;
+    }
+
+    .unified-composer .bar button,
+    .unified-composer .bar select {
+      height: 32px;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      box-shadow: none;
+      background: transparent;
+      color: #9e9e9e;
+    }
+
+    .unified-composer .bar button:hover,
+    .unified-composer .bar select:hover {
+      background: #2b2b2b;
+      color: #dddddd;
+    }
+
+    .unified-composer .bar select:focus,
+    .unified-composer .bar button:focus {
+      outline: none;
+      box-shadow: none;
+    }
+
+    .unified-composer #mode {
+      flex: 0 0 auto;
+      width: 92px;
+      max-width: 92px;
+      padding: 0 24px 0 12px;
+      border-radius: 17px;
+      appearance: none;
+      background-color: #343434;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #a8a8a8 50%),
+        linear-gradient(135deg, #a8a8a8 50%, transparent 50%);
+      background-position:
+        calc(100% - 12px) 13px,
+        calc(100% - 8px) 13px;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+      color: #d4d4d4;
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .unified-composer #model {
+      flex: 1 1 170px;
+      width: auto;
+      min-width: 90px;
+      max-width: 245px;
+      padding: 0 20px 0 4px;
+      appearance: none;
+      background-color: transparent;
+      color: #d0d0d0;
+      font-size: 11px;
+    }
+
+    /* Model discovery already refreshes automatically. Keep the explicit
+       refresh control in the DOM for functionality/tests but out of the
+       primary composer row. */
+    .unified-composer #model-refresh {
+      display: none;
+    }
+
+    .unified-composer #hub-tools-button {
+      width: 32px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 0;
+    }
+
+    .unified-composer #hub-tools-button::before {
+      content: "•••";
+      font-size: 12px;
+      letter-spacing: 2px;
+      line-height: 1;
+    }
+
+    .unified-composer #attach,
+    .unified-composer #mic {
+      width: 34px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 0;
+    }
+
+    .unified-composer #attach svg,
+    .unified-composer #mic svg {
+      width: 19px;
+      height: 19px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .unified-composer #mic::before {
+      content: none;
+    }
+
+    .unified-composer #mic.on {
+      color: #e6958e;
+      background: #332827;
+    }
+
+    .unified-composer #send,
+    .unified-composer #stop {
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      margin: 0 0 0 2px;
+      padding: 0;
+      border-radius: 11px;
+    }
+
+    .unified-composer #send {
+      background: #ececec;
+      color: #111111;
+      font-size: 20px;
+      font-weight: 700;
+      box-shadow: 0 1px 0 #ffffff2b;
+    }
+
+    .unified-composer #send:hover {
+      background: #ffffff;
+      color: #111111;
+    }
+
+    .unified-composer #stop {
+      border: 1px solid #444444;
+      background: #2a2a2a;
+      color: #cccccc;
+    }
+
+    .unified-composer .hub-panel {
+      bottom: 45px;
+    }
+
+    @media (max-width: 470px) {
+      .unified-composer {
+        min-height: 142px;
+        border-radius: 15px;
+      }
+
+      .unified-composer textarea {
+        min-height: 82px;
+        padding: 14px 14px 7px;
+      }
+
+      .unified-composer .unified-composer-bar {
+        gap: 5px;
+        padding: 4px 7px 8px;
+      }
+
+      .composer-left {
+        gap: 4px;
+      }
+
+      .composer-right {
+        gap: 1px;
+      }
+
+      .unified-composer #mode {
+        width: 76px;
+        max-width: 76px;
+        padding-left: 9px;
+        padding-right: 18px;
+      }
+
+      .unified-composer #model {
+        min-width: 70px;
+        max-width: none;
+        padding-left: 2px;
+        padding-right: 16px;
+      }
+
+      .unified-composer #hub-tools-button {
+        display: none;
+      }
+
+      .unified-composer #attach,
+      .unified-composer #mic {
+        width: 30px;
+      }
+
+      .unified-composer #send,
+      .unified-composer #stop {
+        width: 34px;
+        height: 34px;
+      }
+
+      .unified-composer .v19-compose-status {
+        left: 11px;
+        bottom: 43px;
+      }
+    }
+
+    @media (max-width: 340px) {
+      .unified-composer #model {
+        max-width: 115px;
+      }
+
+      .unified-composer #mic {
+        display: none;
+      }
+    }
+</style>
 </head>
 <body>
   <div class="shell">
@@ -226,7 +1258,7 @@ function renderComposer(nonce) {
       <div class="history-list" id="history-list"></div>
     </div>
     <div class="thread" id="thread">
-      <p class="empty" id="empty">Ask about this workspace.</p>
+      <p class="empty" id="empty"><strong>CodeMe AI</strong><span>Build, edit and verify your project.</span></p>
       <div id="messages"></div>
       <div class="clarification" id="clarification" hidden></div>
       <div class="project-decision" id="project-decision"></div>
@@ -241,8 +1273,7 @@ function renderComposer(nonce) {
     <footer>
       <div class="changed-files" id="changed-files"></div>
       <p class="notice" id="notice"></p>
-      <div class="chips" id="chips"></div>
-      <div class="composer" id="drop">
+      <div class="composer unified-composer" id="drop">
         <div class="hub-panel" id="hub-panel">
           <div class="hub-head">
             <strong>n8n MCP tools</strong>
@@ -251,17 +1282,28 @@ function renderComposer(nonce) {
           <div class="hub-flags" id="hub-flags"></div>
           <div class="hub-tools" id="hub-tool-list"></div>
         </div>
-        <textarea id="prompt" placeholder="Ask CodeMe anything, @ files or type /" rows="2"></textarea>
-        <div class="bar">
-          <button type="button" id="attach" title="Add context">＋ Context</button>
-          <button type="button" id="mic" title="Voice to text" aria-pressed="false">Mic</button>
-          <button type="button" id="hub-tools-button" title="n8n MCP tools" aria-expanded="false">n8n</button>
-          <select id="mode" aria-label="Mode">${modeHtml}</select>
-          <select id="model" aria-label="Model"></select>
-          <button type="button" id="model-refresh" title="Refresh models" aria-label="Refresh models">↻</button>
-          <span class="perm" id="perm"></span>
-          <button type="button" id="stop" hidden title="Stop run" aria-label="Stop run">■</button>
-          <button type="button" id="send" title="Send" aria-label="Send">↑</button>
+        <textarea id="prompt" placeholder="Ask CodeMe anything, @ files or type /" rows="3"></textarea>
+        <div class="chips" id="chips"></div>
+        <div class="v19-compose-status" id="v19-compose-status">
+          <span class="v19-state-pill">
+            <span class="v19-state-dot"></span>
+            <span id="v19-compose-status-text">Ready</span>
+          </span>
+        </div>
+        <div class="bar unified-composer-bar">
+          <div class="composer-left">
+            <select id="mode" aria-label="Mode">${modeHtml}</select>
+            <select id="model" aria-label="Model"></select>
+            <span class="perm" id="perm"></span>
+          </div>
+          <div class="composer-right">
+            <button type="button" id="hub-tools-button" title="n8n MCP tools" aria-expanded="false">n8n</button>
+            <button type="button" id="model-refresh" title="Refresh models" aria-label="Refresh models">↻</button>
+            <button type="button" id="attach" title="Add context" aria-label="Add context"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l6.9-6.9a3.5 3.5 0 114.9 5L11 19.9a5 5 0 11-7.1-7.1l9-9a2.5 2.5 0 113.5 3.5L7.8 15.9a1 1 0 01-1.4-1.4l8-8"/></svg></button>
+            <button type="button" id="mic" title="Voice to text" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6 11a6 6 0 0012 0M12 17v4M9 21h6"/></svg></button>
+            <button type="button" id="stop" hidden title="Stop run" aria-label="Stop run">■</button>
+            <button type="button" id="send" title="Send" aria-label="Send">↑</button>
+          </div>
         </div>
       </div>
     </footer>
@@ -270,7 +1312,7 @@ function renderComposer(nonce) {
   <script nonce="${escapeHtml(nonce)}">
     ${client}
     const vscode = acquireVsCodeApi();
-    const prompt = document.getElementById("prompt");
+    const prompt = document.getElementById("prompt");\n    const v19ComposeStatus = document.getElementById("v19-compose-status");\n    const v19ComposeStatusText = document.getElementById("v19-compose-status-text");
     const send = document.getElementById("send");
     const stop = document.getElementById("stop");
     const model = document.getElementById("model");
@@ -317,6 +1359,20 @@ function renderComposer(nonce) {
     let shownRun = "";
     let deferredFinal = "";
     let draft = "";
+    let forceThreadBottom = true;
+
+    function threadNearBottom(threshold = 48) {
+      const remaining = thread.scrollHeight - thread.clientHeight - thread.scrollTop;
+      return remaining <= threshold;
+    }
+
+    function restoreThreadScroll(stickToBottom, previousTop) {
+      if (stickToBottom) {
+        thread.scrollTop = thread.scrollHeight;
+        return;
+      }
+      thread.scrollTop = previousTop;
+    }
 
     function clearSendPending() {
       sending = false;
@@ -329,6 +1385,7 @@ function renderComposer(nonce) {
       if (!text.trim() && !chips.childElementCount) return;
       sending = true;
       draft = text;
+      forceThreadBottom = true;
       epoch += 1;
       send.disabled = true;
       notice.textContent = "Understanding your request…";
@@ -369,6 +1426,7 @@ function renderComposer(nonce) {
     });
     newChat.addEventListener("click", () => {
       historyPanel.classList.remove("on");
+      forceThreadBottom = true;
       vscode.postMessage({ type: "new-chat" });
       prompt.focus();
     });
@@ -384,7 +1442,7 @@ function renderComposer(nonce) {
       mic.classList.toggle("on", on);
       mic.setAttribute("aria-pressed", on ? "true" : "false");
       mic.title = on ? "Stop voice" : "Voice to text";
-      mic.textContent = on ? "Stop" : "Voice";
+      mic.setAttribute("aria-label", on ? "Stop voice" : "Voice to text");
     }
     function stopVoice() {
       if (rec) {
@@ -553,6 +1611,9 @@ function renderComposer(nonce) {
     }
     function applyState(state) {
       if (!current(state)) return;
+      const previousThreadTop = thread.scrollTop;
+      const stickThreadToBottom = forceThreadBottom || threadNearBottom();
+      forceThreadBottom = false;
       if (state.requestId) requestId = state.requestId;
       running = Boolean(state.running);
       if (running && sending) {
@@ -583,6 +1644,34 @@ function renderComposer(nonce) {
       prompt.disabled = false;
       if (!sending) notice.textContent = state.notice || "";
       const picked = normalizeComposerMode(state.composerMode || state.mode);
+      if (v19ComposeStatus && v19ComposeStatusText) {
+        const stageName = String(state.stage || "").toLowerCase();
+        const v19StatusKind = state.error
+          ? "error"
+          : !running && state.outcome && state.outcome.status === "completed"
+            ? "verified"
+            : stageName.includes("edit") || stageName.includes("fix")
+              ? "editing"
+              : stageName.includes("read") || stageName.includes("research") || stageName.includes("understand")
+                ? "reading"
+                : running
+                  ? "running"
+                  : stageName.includes("wait")
+                    ? "waiting"
+                    : "ready";
+        const readyText = picked === "code" || picked === "debug" || picked === "test"
+          ? "Ready · can edit"
+          : "Ready · read-only";
+        const statusText = state.error
+          ? "Error · check technical activity"
+          : running
+            ? (state.activity || state.stage || "Working…")
+            : v19StatusKind === "verified"
+              ? "Verified · run complete"
+              : readyText;
+        v19ComposeStatus.className = "v19-compose-status " + v19StatusKind;
+        v19ComposeStatusText.textContent = statusText;
+      }
       document.getElementById("perm").textContent = composerModeLabel(picked);
       mode.value = picked;
       model.innerHTML = "";
@@ -698,7 +1787,7 @@ function renderComposer(nonce) {
         renderResult(state);
       }
       empty.hidden = Boolean(messages.childElementCount || state.clarification || running);
-      thread.scrollTop = thread.scrollHeight;
+      restoreThreadScroll(stickThreadToBottom, previousThreadTop);
     }
 
     function renderClarification(data) {
