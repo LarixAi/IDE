@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { createRun } = require("./agent-run");
+const { createRun } = require("./run-state");
 const { applyFollowUp } = require("./requirements");
 const {
   capabilityToolDefinitions,
@@ -457,8 +457,8 @@ async function executePipelineRun(run, options, followUpQueue) {
   touch(run, "running");
   run.pipelineVersion = 2;
   run.pipeline = {
-    name: "cursor-style",
-    loop: "event-step-v1",
+    name: "openhands-agent",
+    loop: "openhands-event-step-v1",
     context: "bounded-with-proactive-condenser",
     events: "message-action-observation",
     security: "risk-analysis",
