@@ -1,0 +1,146 @@
+{
+  "name": "codeme-shell",
+  "displayName": "CodeMe",
+  "description": "Minimal CodeMe shell on Code - OSS: identity, theme, Composer, and model connection status.",
+  "version": "0.1.0",
+  "publisher": "codeme",
+  "engines": {
+    "vscode": "^1.139.0"
+  },
+  "categories": [
+    "Other",
+    "Themes"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "themes": [
+      {
+        "id": "CodeMe Dark",
+        "label": "CodeMe Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/codeme-dark-color-theme.json"
+      }
+    ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "codemeAgent",
+          "title": "CodeMe Agent",
+          "icon": "media/codeme.svg"
+        }
+      ]
+    },
+    "views": {
+      "codemeAgent": [
+        {
+          "type": "webview",
+          "id": "codeme.agent",
+          "name": "CodeMe Agent"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codeme.showConnection",
+        "title": "CodeMe: Model Connection",
+        "category": "CodeMe"
+      },
+      {
+        "command": "codeme.ask",
+        "title": "CodeMe: Ask",
+        "category": "CodeMe"
+      },
+      {
+        "command": "codeme.attach",
+        "title": "CodeMe: Attach Workspace File",
+        "category": "CodeMe"
+      },
+      {
+        "command": "codeme.openSettings",
+        "title": "CodeMe: Settings",
+        "category": "CodeMe",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "codeme.openExplorer",
+        "title": "CodeMe: Show Explorer",
+        "category": "CodeMe",
+        "icon": "$(files)"
+      },
+      {
+        "command": "codeme.openTerminal",
+        "title": "CodeMe: Show Terminal",
+        "category": "CodeMe",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "codeme.openPreview",
+        "title": "CodeMe: Open Preview",
+        "category": "CodeMe",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "codeme.openFile",
+        "title": "CodeMe: Open Workspace File",
+        "category": "CodeMe",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "CodeMe Dark",
+      "workbench.startupEditor": "none",
+      "window.commandCenter": false,
+      "window.title": "${dirty}${activeEditorShort}${separator}CodeMe",
+      "chat.disableAIFeatures": true,
+      "chat.commandCenter.enabled": false,
+      "chat.titleBar.signIn.enabled": false,
+      "chat.titleBar.openInAgentsWindow.enabled": false,
+      "workbench.secondarySideBar.defaultVisibility": "visible",
+      "workbench.tips.enabled": false,
+      "workbench.editor.empty.hint": "hidden",
+      "workbench.panel.defaultLocation": "bottom",
+      "explorer.compactFolders": false,
+      "explorer.decorations.badges": true,
+      "explorer.decorations.colors": true,
+      "workbench.tree.indent": 12,
+      "workbench.tree.renderIndentGuides": "always"
+    },
+    "configuration": {
+      "title": "CodeMe",
+      "properties": {
+        "codeme.n8n.allowImageUpload": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow CodeMe to send attached image bytes to image-capable n8n MCP tools. Images are never sent to n8n when this is off."
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "codeme.openSettings",
+          "when": "view == codeme.agent",
+          "group": "navigation@90"
+        },
+        {
+          "command": "codeme.openExplorer",
+          "when": "view == codeme.agent",
+          "group": "navigation@10"
+        },
+        {
+          "command": "codeme.openTerminal",
+          "when": "view == codeme.agent",
+          "group": "navigation@20"
+        },
+        {
+          "command": "codeme.openPreview",
+          "when": "view == codeme.agent",
+          "group": "navigation@30"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,434 @@
+const assert = require("assert");
+const {
+  PaperclipApi,
+  PaperclipController,
+  paperclipLoopbackCandidates,
+  normalizeHeartbeat,
+  paperclipTaskPrompt,
+  repeatedTool,
+} = require("../index");
+
+function fakeSession(options = {}) {
+  const states = Array.isArray(options.states) ? options.states.slice() : [];
+  const session = {
+    mode: "ask",
+    refreshCalls: 0,
+    submitCalls: [],
+    cancelCalls: 0,
+    state: options.initial || {
+      running: false,
+      selected: { provider: "fixture-provider", id: "fixture-model", label: "Fixture Model" },
+      stage: "Waiting",
+      runId: "",
+      tools: [],
+      filesChanged: [],
+      verification: null,
+      outcome: null,
+      error: "",
+    },
+    snapshot() {
+      if (states.length) this.state = { ...this.state, ...states.shift() };
+      return { ...this.state, tools: (this.state.tools || []).map((item) => ({ ...item })) };
+    },
+    async refreshModels() {
+      this.refreshCalls += 1;
+      if (!this.state.selected && options.modelAfterRefresh) {
+        this.state.selected = options.modelAfterRefresh;
+      }
+      return this.state.selected;
+    },
+    selectMode(mode) {
+      this.mode = mode;
+      return { ok: true };
+    },
+    selectModel() {
+      throw new Error("Paperclip must never select or pin a model");
+    },
+    async submit(goal) {
+      this.submitCalls.push(goal);
+      if (options.submitError) throw options.submitError;
+      const result = options.submitResult || { ok: true, runId: "run_codeme_1" };
+      if (result.runId) {
+        this.state.running = true;
+        this.state.runId = result.runId;
+        this.state.stage = "Reading";
+      }
+      if (result.status === "NEEDS_CLARIFICATION") {
+        this.state.clarification = {
+          questions: [{ id: "q1", question: "Which booking type?" }],
+        };
+      }
+      return result;
+    },
+    cancel() {
+      this.cancelCalls += 1;
+      this.state.running = false;
+      this.state.stage = "Cancelled";
+      return { ok: true };
+    },
+  };
+  return session;
+}
+
+function fakeApi(issue = {}) {
+  return {
+    getCalls: [],
+    checkoutCalls: [],
+    updateCalls: [],
+    async getIssue(id) {
+      this.getCalls.push(id);
+      return {
+        id,
+        identifier: "PAP-12",
+        title: "Build booking flow",
+        description: "Create the booking form and availability flow.",
+        ...issue,
+      };
+    },
+    async checkout(input) {
+      this.checkoutCalls.push(input);
+      return { ok: true };
+    },
+    async updateIssue(input) {
+      this.updateCalls.push(input);
+      return { ok: true };
+    },
+  };
+}
+
+async function paperclipLoopbackRecoveryTest() {
+  assert.deepStrictEqual(
+    paperclipLoopbackCandidates("http://127.0.0.1:3100"),
+    ["http://127.0.0.1:3100", "http://localhost:3100"],
+  );
+  assert.deepStrictEqual(
+    paperclipLoopbackCandidates("http://localhost:3100"),
+    ["http://localhost:3100", "http://127.0.0.1:3100"],
+  );
+
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    const value = String(url);
+    calls.push(value);
+    if (value.includes("127.0.0.1")) throw new TypeError("fetch failed");
+    return new Response(JSON.stringify({ id: "controller-id" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const api = new PaperclipApi({
+      baseUrl: "http://127.0.0.1:3100",
+      apiKey: "test-key",
+      timeoutMs: 250,
+    });
+    const result = await api.request("GET", "/api/agents/me");
+    assert.strictEqual(result.id, "controller-id");
+    assert.strictEqual(api.baseUrl, "http://localhost:3100");
+    assert.deepStrictEqual(calls, [
+      "http://127.0.0.1:3100/api/agents/me",
+      "http://localhost:3100/api/agents/me",
+    ]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+}
+
+async function main() {
+  await paperclipLoopbackRecoveryTest();
+  assert.deepStrictEqual(
+    normalizeHeartbeat({
+      runId: "pc-run-1",
+      agentId: "agent-1",
+      companyId: "company-1",
+      context: { taskId: "issue-1" },
+    }),
+    {
+      runId: "pc-run-1",
+      agentId: "agent-1",
+      companyId: "company-1",
+      taskId: "issue-1",
+      context: { taskId: "issue-1" },
+    },
+  );
+  assert.deepStrictEqual(
+    normalizeHeartbeat({
+      runId: "pc-run-standard",
+      agentId: "agent-standard",
+      context: { taskId: "issue-standard", wakeReason: "assignment" },
+    }),
+    {
+      runId: "pc-run-standard",
+      agentId: "agent-standard",
+      companyId: "",
+      taskId: "issue-standard",
+      context: { taskId: "issue-standard", wakeReason: "assignment" },
+    },
+    "standard Paperclip HTTP adapter payload must not require companyId",
+  );
+  assert.throws(() => normalizeHeartbeat({}), /runId is required/);
+
+  const prompt = paperclipTaskPrompt({
+    id: "issue-1",
+    identifier: "PAP-12",
+    title: "Build booking flow",
+    description: "Create the form.",
+  });
+  assert.ok(prompt.includes("PAP-12"));
+  assert.ok(prompt.includes("Work only on this assigned task"));
+  assert.ok(prompt.includes("Do not repeat an identical tool action"));
+
+  const repeated = repeatedTool([
+    { name: "file.read", status: "done", args: { path: "public/index.html" } },
+    { name: "file.read", status: "done", args: { path: "public/index.html" } },
+    { name: "file.read", status: "done", args: { path: "public/index.html" } },
+  ], 3);
+  assert.ok(repeated);
+  assert.strictEqual(repeated.signature, "file.read:public/index.html");
+  assert.strictEqual(
+    repeatedTool([
+      { name: "file.read", status: "done", args: { path: "public/index.html" } },
+      { name: "file.read", status: "done", args: { path: "public/app.js" } },
+      { name: "file.read", status: "done", args: { path: "public/index.html" } },
+    ], 3),
+    null,
+  );
+
+  const completeSession = fakeSession({
+    states: [
+      {
+        running: false,
+        selected: { provider: "fixture-provider", id: "fixture-model", label: "Fixture Model" },
+      },
+      {
+        running: true,
+        runId: "run_codeme_1",
+        stage: "Editing",
+        tools: [{ name: "file.write", status: "done", args: { path: "public/index.html" } }],
+      },
+      {
+        running: false,
+        runId: "run_codeme_1",
+        stage: "Complete",
+        filesChanged: ["public/index.html"],
+        verification: { status: "passed" },
+        outcome: { summary: "Booking flow implemented." },
+      },
+    ],
+  });
+  const completeApi = fakeApi();
+  const complete = new PaperclipController({
+    session: completeSession,
+    api: completeApi,
+    pollMs: 1,
+    maxRunMs: 1000,
+  });
+  const accepted = await complete.handleHeartbeat({
+    runId: "pc-run-1",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-1" },
+  });
+  assert.strictEqual(accepted.accepted, true);
+  assert.strictEqual(completeSession.mode, "code");
+  assert.strictEqual(
+    completeSession.state.selected.id,
+    "fixture-model",
+    "Paperclip must preserve whatever model CodeMe already selected",
+  );
+  assert.strictEqual(completeSession.submitCalls.length, 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(completeApi.checkoutCalls.length === 1);
+  assert.ok(
+    completeApi.updateCalls.some((call) => (
+      !call.status && /starting local execution/i.test(call.comment || "")
+    )),
+    "Paperclip run must leave a run-attributed comment before CodeMe execution continues",
+  );
+  const completedResult = await complete.waitForCompletion("pc-run-1");
+  assert.strictEqual(completedResult.status, "done");
+  assert.strictEqual(completedResult.completed, true);
+  assert.strictEqual(completedResult.codemeRunId, "run_codeme_1");
+  assert.ok(completeApi.updateCalls.some((call) => call.status === "done"));
+  const duplicate = await complete.handleHeartbeat({
+    runId: "pc-run-1",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-1" },
+  });
+  assert.strictEqual(duplicate.duplicate, true);
+  assert.strictEqual(completeSession.submitCalls.length, 1, "duplicate Paperclip run must not start CodeMe twice");
+
+  const syncFailureSession = fakeSession({
+    states: [
+      {
+        running: false,
+        selected: { provider: "fixture-provider", id: "fixture-model", label: "Fixture Model" },
+      },
+      {
+        running: false,
+        runId: "run_codeme_sync_failure",
+        stage: "Complete",
+        filesChanged: ["public/index.html"],
+        verification: { status: "passed" },
+        outcome: { summary: "Work completed locally." },
+      },
+    ],
+    submitResult: { ok: true, runId: "run_codeme_sync_failure" },
+  });
+  const syncFailureApi = fakeApi();
+  let dispositionAttempts = 0;
+  syncFailureApi.updateIssue = async function updateIssue(input) {
+    this.updateCalls.push(input);
+    if (input.status === "done") {
+      dispositionAttempts += 1;
+      const error = new Error("simulated Paperclip disposition failure");
+      error.statusCode = 503;
+      throw error;
+    }
+    return { ok: true };
+  };
+  const syncFailure = new PaperclipController({
+    session: syncFailureSession,
+    api: syncFailureApi,
+    pollMs: 1,
+    maxRunMs: 1000,
+    dispositionRetryDelays: [0, 0, 0],
+  });
+  await syncFailure.handleHeartbeat({
+    runId: "pc-run-sync-failure",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-sync-failure" },
+  });
+  const syncFailureResult = await syncFailure.waitForCompletion("pc-run-sync-failure");
+  assert.strictEqual(syncFailureResult.status, "sync_failed");
+  assert.strictEqual(syncFailureResult.completed, true);
+  assert.strictEqual(syncFailureResult.ok, false);
+  assert.strictEqual(dispositionAttempts, 3, "final disposition must be retried before failing closed");
+  assert.match(syncFailureResult.syncError, /could not persist the final issue disposition/i);
+
+  const submitErrorSession = fakeSession({
+    submitError: new Error("simulated model startup failure"),
+  });
+  const submitErrorApi = fakeApi();
+  const submitErrorController = new PaperclipController({
+    session: submitErrorSession,
+    api: submitErrorApi,
+    pollMs: 1,
+    dispositionRetryDelays: [0, 0, 0],
+  });
+  const submitErrorResult = await submitErrorController.handleHeartbeat({
+    runId: "pc-run-submit-error",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-submit-error" },
+  });
+  assert.strictEqual(submitErrorResult.status, "blocked");
+  assert.strictEqual(submitErrorResult.completed, true);
+  assert.ok(submitErrorApi.updateCalls.some((call) => (
+    call.status === "blocked" && /failed while starting/i.test(call.comment || "")
+  )));
+
+  const clarificationSession = fakeSession({
+    submitResult: { ok: true, status: "NEEDS_CLARIFICATION" },
+  });
+  const clarificationApi = fakeApi();
+  const clarification = new PaperclipController({
+    session: clarificationSession,
+    api: clarificationApi,
+    pollMs: 1,
+  });
+  const blocked = await clarification.handleHeartbeat({
+    runId: "pc-run-2",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-2" },
+  });
+  assert.strictEqual(blocked.needsClarification, true);
+  assert.ok(clarificationApi.updateCalls.some((call) => (
+    call.status === "blocked" && /Which booking type/.test(call.comment)
+  )));
+
+  const clarificationSyncFailureSession = fakeSession({
+    submitResult: { ok: true, status: "NEEDS_CLARIFICATION" },
+  });
+  const clarificationSyncFailureApi = fakeApi();
+  let clarificationDispositionAttempts = 0;
+  clarificationSyncFailureApi.updateIssue = async function updateIssue(input) {
+    this.updateCalls.push(input);
+    if (input.status === "blocked") {
+      clarificationDispositionAttempts += 1;
+      throw new Error("simulated blocked disposition failure");
+    }
+    return { ok: true };
+  };
+  const clarificationSyncFailure = new PaperclipController({
+    session: clarificationSyncFailureSession,
+    api: clarificationSyncFailureApi,
+    pollMs: 1,
+    dispositionRetryDelays: [0, 0, 0],
+  });
+  const clarificationSyncFailureResult = await clarificationSyncFailure.handleHeartbeat({
+    runId: "pc-run-clarification-sync-failure",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-clarification-sync-failure" },
+  });
+  assert.strictEqual(clarificationSyncFailureResult.status, "sync_failed");
+  assert.strictEqual(clarificationDispositionAttempts, 3);
+
+  const loopSession = fakeSession({
+    states: [
+      {
+        running: false,
+        selected: { provider: "fixture", id: "model", label: "Fixture" },
+      },
+      {
+        running: true,
+        runId: "run_codeme_1",
+        stage: "Reading",
+        tools: [
+          { name: "file.read", status: "done", args: { path: "public/index.html" } },
+          { name: "file.read", status: "done", args: { path: "public/index.html" } },
+          { name: "file.read", status: "done", args: { path: "public/index.html" } },
+        ],
+      },
+    ],
+  });
+  const loopApi = fakeApi();
+  const loopController = new PaperclipController({
+    session: loopSession,
+    api: loopApi,
+    pollMs: 1,
+    repeatThreshold: 3,
+    maxRunMs: 1000,
+  });
+  await loopController.handleHeartbeat({
+    runId: "pc-run-3",
+    agentId: "agent-1",
+    companyId: "company-1",
+    context: { taskId: "issue-3" },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.strictEqual(loopSession.cancelCalls, 1, "Paperclip watchdog must cancel a repeated-action loop");
+  assert.ok(loopApi.updateCalls.some((call) => (
+    call.status === "blocked" && /repeated-action loop/.test(call.comment)
+  )));
+
+  complete.dispose();
+  syncFailure.dispose();
+  submitErrorController.dispose();
+  clarification.dispose();
+  clarificationSyncFailure.dispose();
+  loopController.dispose();
+
+  console.log("ok Paperclip recovers loopback control-plane access, controls one CodeMe task, prevents duplicate dispatch, and stops repeated tool loops");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
