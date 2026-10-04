@@ -166,9 +166,14 @@ async function main() {
       { text: "No edit was made.", toolCalls: [] },
     ]);
     const run = await start({ goal: PROMPT, workspace, provider, capabilities: makeHub() }).done;
-    const attempt = run.toolCalls.find((call) => call.name === "file.patch");
-    assert.ok(attempt);
-    assert.strictEqual(attempt.result.ok, false);
+    assert.ok(provider.calls.length > 0);
+    assert.ok(!provider.calls[0].tools.some((tool) => tool.name === "file.patch"), "read-only mode must not expose file.patch");
+    const rejected = (run.agentEvents || []).find((event) => (
+      event.type === "observation"
+      && event.tool === "file.patch"
+      && event.ok === false
+    ));
+    assert.ok(rejected, "the fabricated mutation call should become a failed observation");
     assert.strictEqual(fs.readFileSync(path.join(workspace, "public/app.js"), "utf8"), before);
   });
 
