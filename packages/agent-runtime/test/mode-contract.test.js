@@ -144,7 +144,7 @@ async function runPlanContract() {
   const offered = new Set(model.calls[0].tools);
   assert.ok(!offered.has("file.write"));
   assert.ok(!offered.has("terminal.run"));
-  assert.ok(!offered.has("browser.check"));
+  assert.ok(offered.has("browser.check"), "Read-only browser verification may remain available in Ask/Plan");
   assert.strictEqual(run.filesChanged.length, 0);
 }
 
