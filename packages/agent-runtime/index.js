@@ -10,6 +10,7 @@ const { diagnose } = require("./diagnosis");
 const { selectCapability, recommendCapability, isSiteLayoutGoal } = require("./progress");
 const { decideProject, isDependencyFreeStatic } = require("./project-decision");
 const { hasNoEditDirective, stripNegatedEditing, hasEditIntent, isResearchOnlyRequest } = require("./intent");
+const { runAgentLoop, runPipeline } = require("./agent-loop");
 const { prepareAgentStep, eventsForAssistantReply, eventForObservation } = require("./agent-step");
 const { condenseMessages, messageChars } = require("./context-condenser");
 const { analyzeAction, requiresConfirmation } = require("./security-analyzer");
@@ -29,6 +30,8 @@ module.exports = {
   startAgentRun,
   startPipelineRun,
   resumePipelineRun,
+  runAgentLoop,
+  runPipeline,
   resumeRun,
   applyFollowUp,
   lockModel,
