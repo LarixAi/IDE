@@ -15,6 +15,11 @@ const { hasNoEditDirective, stripNegatedEditing, hasEditIntent, isResearchOnlyRe
 const { runAgentLoop, runPipeline } = require("./agent-loop");
 const { prepareAgentStep, eventsForAssistantReply, eventForObservation } = require("./agent-step");
 const { condenseMessages, messageChars } = require("./context-condenser");
+const { engineerContext } = require("./context-engineering/context-manager");
+const { writeContext } = require("./context-engineering/write-context");
+const { selectContext } = require("./context-engineering/select-context");
+const { isolateContext } = require("./context-engineering/isolate-context");
+const { compressContext } = require("./context-engineering/compress-context");
 const { analyzeAction, requiresConfirmation } = require("./security-analyzer");
 const { AGENT_EVENT_TYPES, createAgentEvent, messageEvent, actionEvent, observationEvent } = require("./agent-events");
 
@@ -54,6 +59,11 @@ module.exports = {
   eventForObservation,
   condenseMessages,
   messageChars,
+  engineerContext,
+  writeContext,
+  selectContext,
+  isolateContext,
+  compressContext,
   analyzeAction,
   requiresConfirmation,
   AGENT_EVENT_TYPES,

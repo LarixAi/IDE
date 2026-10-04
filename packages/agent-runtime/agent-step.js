@@ -7,29 +7,46 @@ const {
   actionEvent,
   observationEvent,
 } = require("./agent-events");
-const { condenseMessages } = require("./context-condenser");
+const { engineerContext } = require("./context-engineering/context-manager");
 const { analyzeAction, requiresConfirmation } = require("./security-analyzer");
 
 function prepareAgentStep(messages, options = {}) {
-  const condensed = condenseMessages(messages, {
+  const engineered = engineerContext(messages, {
+    goal: options.goal,
     maxChars: options.contextWindowChars || 56000,
-    triggerRatio: options.condenseTriggerRatio,
-    targetRatio: options.condenseTargetRatio,
+    selectTriggerRatio: options.contextSelectTriggerRatio,
+    selectTargetRatio: options.contextSelectTargetRatio,
+    compressTriggerRatio: options.condenseTriggerRatio,
+    compressTargetRatio: options.condenseTargetRatio,
     keepRecent: options.keepRecent,
+    maxToolChars: options.contextToolOutputChars,
+    maxArgumentChars: options.contextToolArgumentChars,
   });
   const events = [];
-  if (condensed.kind === "condensation") {
+  if (engineered.changed) {
+    events.push(createAgentEvent(AGENT_EVENT_TYPES.CONTEXT_ENGINEERING, {
+      source: "agent",
+      beforeChars: engineered.beforeChars,
+      afterChars: engineered.afterChars,
+      write: engineered.write,
+      selected: engineered.selection.dropped,
+      isolated: engineered.isolation.isolated,
+      summarized: engineered.compression.summarized || 0,
+    }));
+  }
+  if (engineered.compression.kind === "condensation") {
     events.push(createAgentEvent(AGENT_EVENT_TYPES.CONDENSATION, {
       source: "agent",
-      beforeChars: condensed.beforeChars,
-      afterChars: condensed.afterChars,
-      summarized: condensed.summarized,
+      beforeChars: engineered.compression.beforeChars,
+      afterChars: engineered.compression.afterChars,
+      summarized: engineered.compression.summarized,
     }));
   }
   return {
-    messages: condensed.messages,
+    messages: engineered.messages,
     events,
-    condensation: condensed,
+    condensation: engineered.compression,
+    contextEngineering: engineered,
   };
 }
 

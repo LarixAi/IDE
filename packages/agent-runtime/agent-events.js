@@ -8,6 +8,7 @@ const AGENT_EVENT_TYPES = Object.freeze({
   OBSERVATION: "observation",
   CONDENSATION: "condensation",
   CONDENSATION_REQUEST: "condensation_request",
+  CONTEXT_ENGINEERING: "context_engineering",
   SECURITY: "security",
   CONFIRMATION: "confirmation",
 });

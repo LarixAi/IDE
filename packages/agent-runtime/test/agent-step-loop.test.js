@@ -33,8 +33,8 @@ async function main() {
     condenseTargetRatio: 0.45,
     keepRecent: 4,
   });
-  assert.equal(prepared.events.length, 1);
-  assert.equal(prepared.events[0].type, "condensation");
+  assert.ok(prepared.events.some((event) => event.type === "condensation"));
+  assert.ok(prepared.events.some((event) => event.type === "context_engineering"));
 
   const destructive = analyzeAction({
     id: "call_1",

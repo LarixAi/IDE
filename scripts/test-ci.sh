@@ -28,6 +28,7 @@ export CODEME_SKIP_LIVE="${CODEME_SKIP_LIVE:-1}"
 "$node" "$root/packages/agent-runtime/test/canonical-agent-loop.test.js"
 "$node" "$root/packages/agent-runtime/test/pipeline-v2.test.js"
 "$node" "$root/packages/agent-runtime/test/agent-step-loop.test.js"
+"$node" "$root/packages/agent-runtime/test/context-engineering.test.js"
 "$node" "$root/packages/agent-runtime/test/timeout-recovery.test.js"
 
 # Legacy AgentRun routing/research/stagnation and AgentRun<->n8n registry suites are intentionally excluded.
