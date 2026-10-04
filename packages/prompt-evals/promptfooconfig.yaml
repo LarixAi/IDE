@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: CodeMe prompt contract regression suite
+
+prompts:
+  - file://prompts/codeme-decision.txt
+
+providers:
+  - id: ollama:chat:qwen2.5-coder:14b
+    config:
+      temperature: 0
+      num_predict: 1200
+      format:
+        type: object
+        properties:
+          done:
+            type: boolean
+          nextAction:
+            type: string
+          reason:
+            type: string
+          acceptanceCriteria:
+            type: array
+            items:
+              type: string
+        required:
+          - done
+          - nextAction
+          - reason
+          - acceptanceCriteria
+
+defaultTest:
+  assert:
+    - type: is-json
+    - type: javascript
+      value: |
+        const data = JSON.parse(output);
+        return typeof data.done === 'boolean'
+          && typeof data.nextAction === 'string'
+          && typeof data.reason === 'string'
+          && Array.isArray(data.acceptanceCriteria);
+
+tests:
+  - description: Fleet app is not complete just because generic pages return HTTP 200
+    vars:
+      task: Build a full-stack fleet management application with a dashboard, vehicles, drivers, maintenance jobs, inspections, reports, authentication, persistence, and working browser flows.
+      observation: Express starts and GET / returns HTTP 200, but the page says "My Website". No fleet terms appear in the views. api.js contains no API routes and page routes are placeholders.
+    assert:
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const criteria = data.acceptanceCriteria.join(' ').toLowerCase();
+          return data.done === false
+            && criteria.includes('vehicle')
+            && criteria.includes('driver')
+            && (criteria.includes('maintenance') || criteria.includes('inspection'));
+
+  - description: Declared dependency missing should lead to install and retry
+    vars:
+      task: Start and verify the Express application.
+      observation: npm start failed with "Cannot find module 'express'". package.json already declares express in dependencies.
+    assert:
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const text = (data.nextAction + ' ' + data.reason).toLowerCase();
+          return data.done === false
+            && (/npm\s+install/.test(text) || /install[^.]*dependenc/.test(text));
+
+  - description: EJS and HTML view mismatch must be repaired before completion
+    vars:
+      task: Start the generated site and verify all pages render.
+      observation: Express is configured with view engine "ejs" and res.render("index"), but views contains index.html, about.html, services.html, contact.html, and 404.html. The server reports Failed to lookup view "index".
+    assert:
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const text = (data.nextAction + ' ' + data.reason).toLowerCase();
+          return data.done === false
+            && (text.includes('ejs') || text.includes('view') || text.includes('template'))
+            && (text.includes('html') || text.includes('rename') || text.includes('render'));
+
+  - description: EADDRINUSE should trigger process recovery, not unrelated edits
+    vars:
+      task: Restart the application after changing its view files, then verify it in the browser.
+      observation: npm start failed with EADDRINUSE on port 3000 because a previous node server is still listening.
+    assert:
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          const text = (data.nextAction + ' ' + data.reason).toLowerCase();
+          return data.done === false
+            && (text.includes('port') || text.includes('process') || text.includes('server'))
+            && (text.includes('stop') || text.includes('restart') || text.includes('reuse'));
+
+  - description: Deterministic browser evidence may satisfy completion
+    vars:
+      task: Click the button labelled "Click Me" and confirm it changes to "It works!".
+      observation: browser.capture clicked #action. beforeText="Click Me", afterText="It works!". Assertion textEquals #action expected="It works!" actual="It works!" passed=true. No files were changed.
+    assert:
+      - type: javascript
+        value: |
+          const data = JSON.parse(output);
+          return data.done === true;
