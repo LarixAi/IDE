@@ -47,6 +47,14 @@ function capabilityInput(record, question) {
   return {};
 }
 
+function needsPublishedEvidence(goal) {
+  const text = String(goal || "").toLowerCase();
+  return /\b(?:published|external|outside)\s+(?:rule|standard|evidence|documentation)\b/.test(text)
+    || /\b(?:rule|behaviou?r|requirement)\b[\s\S]{0,80}\b(?:not|isn't|is not)\s+(?:fully\s+)?documented\b/.test(text)
+    || /\bnot\s+(?:fully\s+)?documented\b[\s\S]{0,80}\b(?:rule|behaviou?r|requirement)\b/.test(text)
+    || /\busing\s+(?:the\s+)?(?:evidence|capabilities)\s+available\b/.test(text);
+}
+
 function chooseCapabilityPreflight(run, listed) {
   if (!run || run.mode === "chat_only") return null;
   if (run.taskClass === "layout" || isSiteLayoutGoal(run.goal)) return null;
@@ -57,7 +65,7 @@ function chooseCapabilityPreflight(run, listed) {
     taskClass: run.taskClass,
   });
 
-  if (run.taskClass === "build") {
+  if (run.taskClass === "build" || needsPublishedEvidence(run.goal)) {
     const research = recommendCapability(records);
     if (research) return research;
   }
@@ -126,4 +134,5 @@ module.exports = {
   capabilityInput,
   chooseCapabilityPreflight,
   capabilityBrief,
+  needsPublishedEvidence,
 };
