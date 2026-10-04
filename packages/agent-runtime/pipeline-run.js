@@ -458,7 +458,11 @@ async function executePipelineRun(run, options, followUpQueue) {
   run.pipelineVersion = 2;
   run.pipeline = {
     name: "cursor-style",
-    context: "fixed-bounded",
+    loop: "event-step-v1",
+    context: "bounded-with-proactive-condenser",
+    events: "message-action-observation",
+    security: "risk-analysis",
+    confirmationPolicy: options.confirmationPolicy || "direct",
     toolPolicy: "all-legal-tools",
     verification: "answer-then-verify-repair",
   };
@@ -682,6 +686,11 @@ async function executePipelineRun(run, options, followUpQueue) {
     turnDeadlineMs: options.timeoutMs || 180000,
     retryDeadlineMs: options.retryTimeoutMs || options.timeoutMs || 180000,
     reconnectDelaysMs: options.reconnectDelaysMs,
+    contextWindowChars: options.contextWindowChars || 56000,
+    condenseTriggerRatio: options.condenseTriggerRatio,
+    condenseTargetRatio: options.condenseTargetRatio,
+    condenseKeepRecent: options.condenseKeepRecent,
+    confirmationPolicy: options.confirmationPolicy || "direct",
     resumeFrom: options.resumeFrom || run.pipelineCheckpoint || null,
     onCheckpoint(checkpoint) {
       run.pipelineCheckpoint = checkpoint;
@@ -699,7 +708,10 @@ async function executePipelineRun(run, options, followUpQueue) {
     takeFollowUps: () => followUpQueue.splice(0, followUpQueue.length),
     onEvent(event) {
       run.events.push({ ...event, at: new Date().toISOString() });
-      if (event.type === "model_start") {
+      if (event.type === "agent_event" && event.event) {
+        if (!Array.isArray(run.agentEvents)) run.agentEvents = [];
+        run.agentEvents.push({ ...event.event });
+      } else if (event.type === "model_start") {
         currentModelTurn = event.turn;
         run.iteration = event.turn;
         touch(run, "awaiting_model", { kind: "model", turn: event.turn });
@@ -770,6 +782,7 @@ async function executePipelineRun(run, options, followUpQueue) {
   });
 
   run.messages = result.messages;
+  run.agentEvents = Array.isArray(result.agentEvents) ? result.agentEvents.map((event) => ({ ...event })) : (run.agentEvents || []);
   run.inFlight = null;
   if (result.checkpoint) run.pipelineCheckpoint = result.checkpoint;
   run.outcome = {
