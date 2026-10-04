@@ -1,3 +1,9 @@
+const {
+  CODE_PROMPT_PROTOCOL,
+  PLAN_PROMPT_PROTOCOL,
+  ASK_PROMPT_PROTOCOL,
+} = require("./prompt-engineering");
+
 const PIPELINE_SYSTEM_INSTRUCTIONS = [
   "You are CodeMe, a coding agent working inside the user's real project folder.",
   "Understand the goal first. When repository facts are needed, use the available tools instead of guessing file contents.",
@@ -8,6 +14,7 @@ const PIPELINE_SYSTEM_INSTRUCTIONS = [
   "When the task is finished, reply without a tool call. The harness will verify the result and send any failed checks back to you for repair.",
   "If a tool returns an error, use that exact observation to change your next action. Do not repeat the same failed call unchanged.",
   "All paths are workspace-relative. Do not invent successful tool results, ports, URLs, files, commands, or external evidence.",
+  CODE_PROMPT_PROTOCOL,
 ].join("\n");
 
 const ASK_SYSTEM_INSTRUCTIONS = [
@@ -18,6 +25,7 @@ const ASK_SYSTEM_INSTRUCTIONS = [
   "Inspect only what is needed. Do not reread the same file or repeat the same search with unchanged arguments.",
   "Once you have enough evidence, stop using tools and answer immediately.",
   "Do not edit files or start processes. Reply without a tool call when you have enough evidence.",
+  ASK_PROMPT_PROTOCOL,
 ].join("\n");
 
 const PLAN_SYSTEM_INSTRUCTIONS = [
@@ -26,6 +34,7 @@ const PLAN_SYSTEM_INSTRUCTIONS = [
   "Use native tool calling when a tool is required. Do not merely say that you will use a tool or put a tool call in ordinary prose.",
   "Name the relevant files and verification steps. Do not edit files.",
   "Reply without a tool call when the plan is complete.",
+  PLAN_PROMPT_PROTOCOL,
 ].join("\n");
 
 const CHAT_SYSTEM_INSTRUCTIONS = [
