@@ -1,17 +1,17 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "CodeMe OpenHands Agent Loop Canonical Lock",
-  "baselineCommit": "ca0659f774b2a0373e4960cb0942d44a5cc9ff6f",
+  "baselineCommit": "5bee1cc601177dec579152b71aa66e4985aaa730",
   "baselineBranch": "codeme/openhands-only-loop",
   "lockedAt": "2026-10-04",
   "policy": {
     "owner": "LarixAi",
     "rule": "Do not add a second executable agent loop, legacy routing switch, or protected-pipeline change unless the repository owner explicitly approves it.",
     "addons": "New features should integrate through external tools, capabilities, providers, UI modules, or other extension points without changing the protected pipeline core.",
-    "approvedChange": "Owner-approved single-loop cutover: OpenHands-style event-step pipeline is the only executable CodeMe agent loop."
+    "approvedChange": "Owner-approved OpenHands-only loop cutover with capability preflight preserved inside the canonical pipeline."
   },
   "protectedFiles": {
-    "packages/agent-runtime/pipeline-run.js": "1b68ef414ad41a15a34b6ed96fe6ddd083198e43",
+    "packages/agent-runtime/pipeline-run.js": "1b39fceaf563433300287bb55387840eb08f4b6a",
     "packages/agent-runtime/pipeline-loop.js": "4e7ebea2e736657cf500242ddd60424abfea5049",
     "packages/agent-runtime/pipeline-context.js": "79c906348f6f50b1e416ca3cad0223803ff021ab",
     "packages/agent-runtime/pipeline-instructions.js": "472de57e802ab3e0066bf4ad2356f209fd57bbf8",
@@ -25,7 +25,9 @@
     "extensions/codeme-shell/composer-session.js": "c9a4b325586d5f8fa9c9e9eb18498685a7be17e6",
     "packages/agent-runtime/test/pipeline-v2.test.js": "48f9a48ff98d236803c9729a380583e294f8f06d",
     "extensions/codeme-shell/test/composer-pipeline-v2.test.js": "71f6062c045cb84fc5d1af7c2e3fbe36422c8ab1",
-    "packages/agent-runtime/run-state.js": "3afcaaa2a0595fbdf11830cd14ac45a9f3236fe0"
+    "packages/agent-runtime/run-state.js": "3afcaaa2a0595fbdf11830cd14ac45a9f3236fe0",
+    "packages/agent-runtime/capability-preflight.js": "edf175ca1e49cdbd977624f0da6ee197b33b5dcf",
+    "packages/agent-runtime/test/single-loop-contract.test.js": "c1685d34110ea2ff7a7f4c74cb773180e94e67d6"
   },
   "extensionPoints": [
     "packages/n8n-capability/**",
@@ -46,6 +48,12 @@
       "date": "2026-10-04",
       "change": "Removed legacy agent-run executor and CODEME_AGENT_PIPELINE fallback; OpenHands-style event-step pipeline is canonical and exclusive.",
       "source": "https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx",
+      "branch": "codeme/openhands-only-loop"
+    },
+    {
+      "date": "2026-10-04",
+      "change": "Moved capability research/memory/decomposition preflight into the canonical OpenHands pipeline so legacy routing is not required.",
+      "source": "CodeMe canonical OpenHands loop",
       "branch": "codeme/openhands-only-loop"
     }
   ]
