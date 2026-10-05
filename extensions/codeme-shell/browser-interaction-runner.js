@@ -182,9 +182,10 @@ function createBrowserInteractionRunner(options = {}) {
         const failedRequests = [];
         const httpErrors = [];
         const networkWarnings = [];
+        const allowPresentationWarnings = input && input.allowPresentationWarnings === true;
         client.onEvent((message) => {
-          collectBrowserError(message, consoleErrors);
-          collectBrowserEvidence(message, { pageErrors, failedRequests, httpErrors, networkWarnings });
+          collectBrowserError(message, consoleErrors, { allowPresentationWarnings });
+          collectBrowserEvidence(message, { pageErrors, failedRequests, httpErrors, networkWarnings, allowPresentationWarnings });
         });
 
         await client.send("Runtime.enable");
@@ -569,7 +570,7 @@ function collectBrowserEvidence(message, evidence) {
     // superseded by the explicit Page.navigate call. The final HTTP response,
     // runtime errors, and interaction assertions are checked separately.
     if (text === "net::ERR_ABORTED" && !params.blockedReason) return;
-    if (isNonBlockingPresentationResource("", params.type)) {
+    if (evidence.allowPresentationWarnings && isNonBlockingPresentationResource("", params.type)) {
       pushNetworkWarning(evidence, `${String(params.type || "resource")} request: ${text}`);
       return;
     }
@@ -583,7 +584,7 @@ function collectBrowserEvidence(message, evidence) {
     const url = String(response.url || "");
     if (/favicon\.ico(?:\?|$)/i.test(url)) return;
     const item = `${Number(response.status)} ${url}`.trim();
-    if (isNonBlockingPresentationResource(url, params.type)) {
+    if (evidence.allowPresentationWarnings && isNonBlockingPresentationResource(url, params.type)) {
       pushNetworkWarning(evidence, item);
       return;
     }
@@ -591,7 +592,7 @@ function collectBrowserEvidence(message, evidence) {
   }
 }
 
-function collectBrowserError(message, errors) {
+function collectBrowserError(message, errors, options = {}) {
   if (!message || !message.method) return;
   let text = "";
   if (message.method === "Runtime.exceptionThrown") {
@@ -605,7 +606,7 @@ function collectBrowserError(message, errors) {
     const entry = message.params && message.params.entry;
     if (!entry || entry.level !== "error") return;
     if (/favicon\.ico(?:\?|$)/i.test(String(entry.url || ""))) return;
-    if (isNonBlockingPresentationResource(entry.url || "", "")) return;
+    if (options.allowPresentationWarnings && isNonBlockingPresentationResource(entry.url || "", "")) return;
     text = entry.text || "";
   }
   text = String(text || "").trim();
