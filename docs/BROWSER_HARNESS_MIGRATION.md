@@ -7,17 +7,20 @@ Pinned candidate package for this migration: `browser-harness[mcp]==0.1.13`.
 
 ## Safety rule
 
-Do not remove or weaken the existing `browser.check` / `browser.interact` implementation
-until the replacement gates below pass. During the candidate phase the canonical OpenHands-style
-CodeMe loop and its protected pipeline files remain unchanged.
+Do not delete the existing `browser.check` / `browser.interact` implementation until the
+replacement gates below pass. For harness-only testing, the legacy implementation stays in source
+but its tools are disabled in the controlled model registry by default. The rollback switch in
+CodeMe Settings can expose them again if Browser Harness is unavailable.
 
-The candidate is integrated through CodeMe's existing local external-tool/MCP extension point.
+The canonical OpenHands-style CodeMe loop and its protected pipeline files remain unchanged.
+Browser Harness is integrated through CodeMe's existing local external-tool/MCP extension point.
 
 ## Enable the candidate
 
 Browser Harness requires Python 3.11+, `uvx`, and Chrome/Chromium remote debugging.
 
-In CodeMe Settings -> Browser & Preview, enable **Browser Harness candidate**.
+The migration defaults are now **Browser Harness enabled** and **legacy CodeMe browser fallback disabled**.
+In CodeMe Settings -> Browser & Preview, you can re-enable the legacy fallback only if you need to roll back.
 
 The underlying MCP command is:
 
@@ -70,5 +73,6 @@ Only after the gates pass:
 - remove the old in-house CDP runner and duplicate tests;
 - keep a single browser implementation.
 
-Until then, the current browser runner remains the completion authority and Browser Harness is a
-candidate diagnostic/control path.
+During this test stage, Browser Harness is the only browser-control tool exposed to controlled
+CodeMe runs by default. The old browser implementation remains present only for rollback and will
+not be deleted until the replacement gates pass.
