@@ -26,6 +26,7 @@ async function main() {
   assert.strictEqual(initial.effective.chatActivity.showN8nOnlyWhenUsed, true);
   assert.strictEqual(initial.effective.appearance.showServiceStatus, true);
   assert.strictEqual(initial.effective.skills.enabled, true);
+  assert.strictEqual(initial.effective.browser.browserHarnessEnabled, false);
 
   await store.update("global", "general.defaultMode", "team");
   assert.strictEqual(store.snapshot("global").effective.general.defaultMode, "team");
@@ -40,6 +41,7 @@ async function main() {
   assert.strictEqual(store.snapshot("workspace").effective.general.defaultMode, "team");
 
   assert.strictEqual(hasDefaultPath("chatActivity.showPaperclipOnlyWhenUsed"), true);
+  assert.strictEqual(hasDefaultPath("browser.browserHarnessEnabled"), true);
   assert.strictEqual(hasDefaultPath("paperclip.apiKey"), false);
   assert.strictEqual(getPath(DEFAULTS, "general.autoSave"), true);
 

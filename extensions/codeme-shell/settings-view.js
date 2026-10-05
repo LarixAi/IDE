@@ -301,7 +301,23 @@ function renderPanel(id, state, values) {
   if (id === "skills") return renderSkills(state, values);
   if (id === "workspace") return '<div class="page-title"><div><h2>Workspace</h2><p>Workspace boundaries, indexing and external-path policy.</p></div></div>' + planned("Workspace policy", "Configure allowed roots, ignore patterns, indexing rules and explicit outside-workspace approvals.");
   if (id === "terminal") return '<div class="page-title"><div><h2>Terminal</h2><p>Shell execution and command approval policy.</p></div></div>' + planned("Terminal permissions", "Separate safe commands, app startup, dependency installs, destructive commands and sudo into Allow / Ask / Block policies.");
-  if (id === "browser") return '<div class="page-title"><div><h2>Browser & Preview</h2><p>Preview lifecycle and browser verification defaults.</p></div></div>' + planned("Preview policy", "Manage preview ports, process reuse, browser verification and automatic startup checks.");
+  if (id === "browser") {
+    const harness = state.browserHarness || {};
+    const harnessStatus = String(harness.status || "disabled");
+    return [
+      '<div class="page-title"><div><h2>Browser &amp; Preview</h2><p>Test Browser Harness safely before replacing the current browser verifier.</p></div></div>',
+      '<div class="hero-card"><span class="eyebrow">Active browser engine</span><h3>Current CodeMe CDP runner</h3><p>The existing browser.check/browser.interact path remains the completion authority until the replacement gates pass.</p></div>',
+      '<div class="card"><h3>Browser Harness candidate</h3>',
+      toggle("browser.browserHarnessEnabled", "Enable Browser Harness candidate", values.browser && values.browser.browserHarnessEnabled === true, "Expose the MCP-backed candidate tool alongside the current browser runner for controlled migration testing."),
+      '<div class="info-row"><span>Candidate status</span><span class="badge ' + (harnessStatus === "connected" ? "ok" : "") + '">' + escapeHtml(harnessStatus) + '</span></div>',
+      '<div class="info-row"><span>MCP package</span><code>' + escapeHtml(harness.packageSpec || "browser-harness[mcp]==0.1.13") + '</code></div>',
+      '<div class="info-row"><span>Recording</span><span>' + escapeHtml(harness.allowRecording ? "Allowed" : "Disabled") + '</span></div>',
+      '<div class="info-row"><span>Replacement ready</span><span class="badge">' + escapeHtml(harness.replacementReady ? "Yes" : "No — testing") + '</span></div>',
+      '<p class="muted">' + escapeHtml(harness.detail || "Enable the candidate to probe Browser Harness through MCP.") + '</p>',
+      '</div>',
+      '<div class="notice">Cutover policy: test first, then route the existing browser.check/browser.interact contracts to Browser Harness, run CI and recovery tests, and only then remove the old browser runner.</div>',
+    ].join("");
+  }
   if (id === "git") return '<div class="page-title"><div><h2>Git & GitHub</h2><p>Source-control behaviour and remote actions.</p></div></div>' + planned("Git permissions", "Configure diff, commit, push, force-push and GitHub write approvals separately.");
   if (id === "chat") return [
     '<div class="page-title"><div><h2>Chat & Activity</h2><p>Keep service health visible while hiding unused activity.</p></div></div><div class="card">',

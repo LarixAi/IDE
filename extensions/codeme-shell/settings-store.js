@@ -34,6 +34,9 @@ const DEFAULTS = Object.freeze({
   skills: {
     enabled: true,
   },
+  browser: {
+    browserHarnessEnabled: false,
+  },
   advanced: {
     experimentalFeatures: false,
   },

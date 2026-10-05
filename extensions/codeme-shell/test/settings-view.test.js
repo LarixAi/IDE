@@ -9,7 +9,16 @@ const state = {
     effective: JSON.parse(JSON.stringify(DEFAULTS)),
   },
   health: {
-    paperclip: { status: "online", detail: "Bridge, control plane and configured team are ready." },
+    browserHarness: {
+    enabled: false,
+    connected: false,
+    status: "disabled",
+    detail: "Browser Harness candidate is disabled. The current CodeMe browser runner remains active.",
+    packageSpec: "browser-harness[mcp]==0.1.13",
+    allowRecording: false,
+    replacementReady: false,
+  },
+  paperclip: { status: "online", detail: "Bridge, control plane and configured team are ready." },
     n8n: { status: "online", detail: "n8n MCP connected with 4 discovered tool(s)." },
     model: { status: "online", detail: "Local · Qwen 3.5 9B is ready." },
   },
@@ -97,6 +106,9 @@ assert.ok(html.includes("GitHub"));
 assert.ok(html.includes("Workspace"));
 assert.ok(html.includes("Terminal"));
 assert.ok(html.includes("Browser &amp; Preview"));
+assert.ok(html.includes("Browser Harness candidate"));
+assert.ok(html.includes("Current CodeMe CDP runner"));
+assert.ok(html.includes("No — testing"));
 assert.ok(html.includes("Git &amp; GitHub"));
 assert.ok(html.includes("Chat &amp; Activity"));
 assert.ok(html.includes("Permissions"));

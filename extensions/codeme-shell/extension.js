@@ -30,6 +30,7 @@ const { TerminalObserver } = require("./terminal-observer");
 const { ResearchEngineerProvider } = require("./research-engineer");
 const { CodeMeCapabilityManager } = require("./capability-manager");
 const { ContextUnderstanding } = require("./context-understanding");
+const { BrowserHarnessProvider } = require("./browser-harness-provider");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -69,6 +70,7 @@ function activate(context) {
     {
       dispose: () => {
         if (composer.externalTools && typeof composer.externalTools.close === "function") composer.externalTools.close();
+        if (composer.browserHarness && typeof composer.browserHarness.close === "function") composer.browserHarness.close();
       },
     },
   );
@@ -224,7 +226,7 @@ function activate(context) {
       return composer.n8n.snapshot();
     },
     onSettingsChanged: async () => {
-      composer.post(composer.session.snapshot());
+      await refreshHub();
     },
   });
   context.subscriptions.push(settingsPanel);
@@ -441,6 +443,9 @@ async function buildSettingsState({ scope, composer, paperclip, state }) {
       available: Array.isArray(snapshot.models) ? snapshot.models : [],
     },
     n8n,
+    browserHarness: composer.browserHarness && typeof composer.browserHarness.status === "function"
+      ? composer.browserHarness.status()
+      : { enabled: false, connected: false, status: "unavailable", replacementReady: false },
     mcp: composer.externalTools && typeof composer.externalTools.snapshot === "function"
       ? composer.externalTools.snapshot()
       : { servers: [], status: [] },
@@ -1063,9 +1068,18 @@ class ComposerViewProvider {
     this.n8n = new N8nIntegration(context);
     this.terminalObserver = new TerminalObserver(vscode).start();
     this.researchEngineer = new ResearchEngineerProvider();
+    this.browserHarness = new BrowserHarnessProvider({
+      isEnabled: () => {
+        const values = settingsStore && typeof settingsStore.effectiveValues === "function"
+          ? settingsStore.effectiveValues()
+          : {};
+        return Boolean(values.browser && values.browser.browserHarnessEnabled === true);
+      },
+    });
     this.externalTools = new UniversalMcpRegistry(context, this.n8n, [
       this.terminalObserver,
       this.researchEngineer,
+      this.browserHarness,
     ]);
     this.contextUnderstanding = new ContextUnderstanding({
       getRoot: () => workspaceRoot(),
@@ -1082,6 +1096,13 @@ class ComposerViewProvider {
           status: this.researchEngineer && this.researchEngineer.enabled ? "connected" : "disabled",
           connected: Boolean(this.researchEngineer && this.researchEngineer.enabled),
           description: "Native bounded technical research across configured web, GitHub and npm sources.",
+        },
+        {
+          id: "browser-harness",
+          name: "Browser Harness",
+          status: this.browserHarness.status().status,
+          connected: this.browserHarness.status().connected,
+          description: "Experimental MCP-backed browser control candidate. The current browser.check remains authoritative until migration tests pass.",
         },
         {
           id: "project-brain",
