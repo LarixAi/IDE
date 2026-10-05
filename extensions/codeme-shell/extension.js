@@ -29,6 +29,7 @@ const { loadSkills } = require("../../packages/agent-runtime/skills");
 const { TerminalObserver } = require("./terminal-observer");
 const { ResearchEngineerProvider } = require("./research-engineer");
 const { CodeMeCapabilityManager } = require("./capability-manager");
+const { ContextUnderstanding } = require("./context-understanding");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -1066,6 +1067,10 @@ class ComposerViewProvider {
       this.terminalObserver,
       this.researchEngineer,
     ]);
+    this.contextUnderstanding = new ContextUnderstanding({
+      getRoot: () => workspaceRoot(),
+      storageDir: path.join(context.globalStorageUri.fsPath, "context-understanding"),
+    });
     this.capabilityManager = new CodeMeCapabilityManager({
       getRoot: () => workspaceRoot(),
       loadSkills,
@@ -1084,6 +1089,13 @@ class ComposerViewProvider {
           status: workspaceRoot() ? "connected" : "unavailable",
           connected: Boolean(workspaceRoot()),
           description: "Durable project identity, requirements, decisions and verified lessons.",
+        },
+        {
+          id: "context-understanding",
+          name: "Context Understanding",
+          status: workspaceRoot() ? "connected" : "unavailable",
+          connected: Boolean(workspaceRoot()),
+          description: "Semantic intent, recent-reference resolution, and lightweight repository mapping before the agent loop.",
         },
       ],
     });
@@ -1222,11 +1234,27 @@ class ComposerViewProvider {
       const text = String(message.text || "");
       this.view.webview.postMessage({ type: "submitting", epoch: message.epoch });
       try {
+        const understanding = this.contextUnderstanding
+          ? this.contextUnderstanding.resolve(text, {
+            thread: this.session.thread,
+            snapshot: this.session.snapshot(),
+          })
+          : { goal: text, changed: false };
+        if (understanding.changed) {
+          this.session.notice = "Understood as " + understanding.intent.replace(/_/g, " ") + " · " + understanding.reason;
+          this.session.emit();
+        }
         const result = this.session.composerMode === "multitask"
           ? (this.multitask
             ? this.multitask.start(text, message.epoch)
             : { ok: false, code: "paperclip_unavailable", message: "Multitask is unavailable because Paperclip is not connected." })
-          : await this.session.submit(text, message.epoch);
+          : await this.session.submit(
+            text,
+            message.epoch,
+            understanding.changed
+              ? { goalOverride: understanding.goal, skipEnhancement: true }
+              : {},
+          );
         if (!result.ok) {
           this.view.webview.postMessage({ type: "rejected", epoch: message.epoch, code: result.code, message: result.message });
           return;
