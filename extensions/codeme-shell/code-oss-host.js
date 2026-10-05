@@ -6,6 +6,7 @@ const { createPreviewRunner, resolveOwnedPreviewUrl } = require("./preview-runne
 const { createPreviewSessionManager } = require("./preview-session-manager");
 const { createBrowserInteractionRunner } = require("./browser-interaction-runner");
 const { createSandboxRunner } = require("./sandbox-runner");
+const { createAgentTerminalSandbox } = require("./agent-terminal-sandbox");
 const { describeFileRead } = require("./image-meta");
 const { inspectWorkspace } = require("./workspace-inspector");
 const { readDocument: decodeDocument, createDocument: buildDocument, editDocument: patchDocument } = require("./document-service");
@@ -13,6 +14,7 @@ const { readDocument: decodeDocument, createDocument: buildDocument, editDocumen
 const preview = createPreviewRunner(vscode);
 const browserInteraction = createBrowserInteractionRunner();
 const sandbox = createSandboxRunner();
+const agentTerminalSandbox = createAgentTerminalSandbox();
 const previewSessions = createPreviewSessionManager(vscode);
 
 function workspaceFolder() {
@@ -204,15 +206,15 @@ async function runSandbox(input) {
 }
 
 async function runTerminal(command) {
-  const result = await runProcess(command);
-  const stdout = String(result.stdout || "");
-  const stderr = String(result.stderr || "");
-  return {
-    exitCode: result.exitCode,
-    stdout,
-    stderr,
-    output: [stdout, stderr].filter(Boolean).join(stderr && stdout ? "\n" : ""),
-  };
+  return agentTerminalSandbox.run(workspaceFolder().uri.fsPath, command, {
+    timeoutMs: 30000,
+  });
+}
+
+async function runTests(command) {
+  return agentTerminalSandbox.run(workspaceFolder().uri.fsPath, command, {
+    timeoutMs: 120000,
+  });
 }
 
 async function startProcess(command) {
@@ -428,7 +430,7 @@ const host = {
   gitStatus,
   gitDiff,
   diagnostics,
-  runTests: runProcess,
+  runTests,
   browserCheck,
   browserInteract,
 };
