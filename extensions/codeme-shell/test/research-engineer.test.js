@@ -7,6 +7,7 @@ const {
   curateSources,
   researchGaps,
 } = require("../research-engineer");
+const { ResearchModeToolProvider } = require("../research-mode-tool-provider");
 
 function response(payload, status = 200) {
   return {
@@ -117,10 +118,26 @@ async function main() {
   assert.ok(gaps.some((item) => item.includes("diversity")));
   assert.ok(gaps.some((item) => item.includes("searxng")));
 
+  const researchMode = new ResearchModeToolProvider({}, provider);
+  const researchModeTools = new Set(researchMode.definitions().map((tool) => tool.name));
+  assert.ok(researchModeTools.has("research.engineer"));
+  assert.ok(researchModeTools.has("file.read"));
+  assert.ok(researchModeTools.has("dir.list"));
+  assert.ok(!researchModeTools.has("file.write"));
+  assert.ok(!researchModeTools.has("file.patch"));
+  assert.ok(!researchModeTools.has("terminal.run"));
+  assert.ok(!researchModeTools.has("process.start"));
+  const researchModeResult = await researchMode.call("research.engineer", {
+    question: "Compare current OpenHands agent loop architecture patterns.",
+    depth: "quick",
+    maxSources: 3,
+  });
+  assert.strictEqual(researchModeResult.ok, true, JSON.stringify(researchModeResult, null, 2));
+
   const disabled = new ResearchEngineerProvider({ fetch, enabled: false });
   assert.deepStrictEqual(disabled.listTools(), []);
 
-  console.log("ok native Research Engineer provider");
+  console.log("ok native Research Engineer provider and read-only Research mode");
 }
 
 main().catch((error) => {
