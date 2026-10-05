@@ -35,7 +35,8 @@ const DEFAULTS = Object.freeze({
     enabled: true,
   },
   browser: {
-    browserHarnessEnabled: false,
+    browserHarnessEnabled: true,
+    legacyBrowserEnabled: false,
   },
   advanced: {
     experimentalFeatures: false,
