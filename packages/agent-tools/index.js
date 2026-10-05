@@ -253,33 +253,87 @@ function validateSandboxCommand(command) {
 }
 
 function validateCommand(command) {
-  if (typeof command !== "string" || command.length === 0) {
+  const text = typeof command === "string" ? command.trim() : "";
+  if (!text) {
     return { code: "invalid_args", message: "Command must be a non-empty string" };
   }
-  if (/[\0\n\r;&|`$<>\\"']/.test(command) || command.includes("(") || command.includes(")")) {
+  if (/[\0\n\r;&|`$<>\\\"']/.test(text) || text.includes("(") || text.includes(")")) {
     return { code: "command_rejected", message: "Command contains shell syntax" };
   }
-  if (command.includes("..")) {
+  if (text.includes("..")) {
     return { code: "path_escape", message: "Command escapes the workspace" };
   }
-  const parts = command.trim().split(/\s+/);
-  if (parts[0] === "npm") {
-    if (parts.length !== 2 || parts[1] !== "test") {
-      return { code: "command_rejected", message: "npm is limited to npm test" };
+
+  const parts = text.split(/\s+/);
+  const program = parts.shift();
+  const args = parts;
+
+  const safeRelative = (value) => {
+    const candidate = String(value || "");
+    if (
+      !candidate
+      || candidate.startsWith("-")
+      || path.isAbsolute(candidate)
+      || /^[A-Za-z]:[\\/]/.test(candidate)
+      || candidate.includes("..")
+    ) return false;
+    return true;
+  };
+
+  if (program === "npm") {
+    if (args.length === 1 && args[0] === "test") return null;
+    if (args.length === 2 && args[0] === "run" && /^[A-Za-z0-9:_-]+$/.test(args[1])) {
+      if (["start", "dev", "preview"].includes(args[1].toLowerCase())) {
+        return {
+          code: "process_required",
+          message: "Use process.start for long-running npm start/dev/preview scripts",
+        };
+      }
+      return null;
     }
-    return null;
+    return {
+      code: "command_rejected",
+      message: "terminal.run supports npm test or npm run <short-lived-script>",
+    };
   }
-  if (parts[0] !== "node") {
-    return { code: "command_rejected", message: "Only node and npm test are allowed" };
+
+  if (program === "node") {
+    if (args.length === 1 && safeRelative(args[0])) return validateWorkspacePath(args[0]);
+    if (args.length === 2 && args[0] === "--check" && safeRelative(args[1])) {
+      return validateWorkspacePath(args[1]);
+    }
+    if (args.length <= 2 && args[0] === "--test" && (!args[1] || safeRelative(args[1]))) {
+      return args[1] ? validateWorkspacePath(args[1]) : null;
+    }
+    return {
+      code: "command_rejected",
+      message: "terminal.run supports node <file>, node --check <file>, or node --test [file]",
+    };
   }
-  const fileArgs = parts.slice(1).filter((part) => part !== "--check");
-  if (fileArgs.length !== 1 || fileArgs[0].startsWith("-")) {
-    return { code: "command_rejected", message: "node must run one workspace file" };
+
+  if (program === "python3") {
+    if (args.length === 1 && safeRelative(args[0]) && /\.py$/i.test(args[0])) {
+      return validateWorkspacePath(args[0]);
+    }
+    if (
+      args.length >= 2
+      && args.length <= 3
+      && args[0] === "-m"
+      && args[1] === "pytest"
+      && (!args[2] || safeRelative(args[2]))
+    ) {
+      return args[2] ? validateWorkspacePath(args[2]) : null;
+    }
+    return {
+      code: "command_rejected",
+      message: "terminal.run supports python3 <file.py> or python3 -m pytest [path]",
+    };
   }
-  if (path.isAbsolute(fileArgs[0])) {
-    return { code: "absolute_path", message: "Path must stay inside the workspace" };
-  }
-  return validateWorkspacePath(fileArgs[0]);
+
+  return {
+    code: "command_rejected",
+    message: "terminal.run allows short-lived node, npm, or python3 developer commands only",
+  };
 }
 
 async function executeReadOnly(host, tool, args) {

@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { execute, executeReadOnly, executeControlled, TOOLS } = require("../index.js");
+const { execute, executeReadOnly, executeControlled, validateCommand, TOOLS } = require("../index.js");
 
 const host = {
   async readFile() {
@@ -311,6 +311,28 @@ async function main() {
     assert.strictEqual(failed.error.code, "exit_status");
     assert.strictEqual(failed.data.exitCode, 2);
     assert.ok(failed.data.stderr.includes("SyntaxError"));
+  });
+
+  await test("terminal.run accepts short-lived developer commands and redirects servers", () => {
+    assert.strictEqual(validateCommand("npm test"), null);
+    assert.strictEqual(validateCommand("npm run build"), null);
+    assert.strictEqual(validateCommand("npm run lint"), null);
+    assert.strictEqual(validateCommand("node script.js"), null);
+    assert.strictEqual(validateCommand("node --check script.js"), null);
+    assert.strictEqual(validateCommand("node --test"), null);
+    assert.strictEqual(validateCommand("node --test test/app.test.js"), null);
+    assert.strictEqual(validateCommand("python3 script.py"), null);
+    assert.strictEqual(validateCommand("python3 -m pytest"), null);
+    assert.strictEqual(validateCommand("python3 -m pytest tests"), null);
+
+    const longRunning = validateCommand("npm run dev");
+    assert.strictEqual(longRunning.code, "process_required");
+
+    const install = validateCommand("npm install");
+    assert.strictEqual(install.code, "command_rejected");
+
+    const shell = validateCommand("npm test | cat");
+    assert.strictEqual(shell.code, "command_rejected");
   });
 
   await test("process.start only permits approved long-running scripts", async () => {

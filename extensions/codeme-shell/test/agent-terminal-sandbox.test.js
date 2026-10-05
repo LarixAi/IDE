@@ -23,13 +23,29 @@ async function main() {
     program: "npm",
     args: ["test"],
   });
+  assert.deepStrictEqual(parseAgentCommand("npm run build"), {
+    program: "npm",
+    args: ["run", "build"],
+  });
+  assert.deepStrictEqual(parseAgentCommand("node --test"), {
+    program: "node",
+    args: ["--test"],
+  });
+  assert.deepStrictEqual(parseAgentCommand("python3 script.py"), {
+    program: "python3",
+    args: ["script.py"],
+  });
+  assert.deepStrictEqual(parseAgentCommand("python3 -m pytest tests"), {
+    program: "python3",
+    args: ["-m", "pytest", "tests"],
+  });
+  assert.throws(
+    () => parseAgentCommand("npm run dev"),
+    (error) => error && error.code === "process_required",
+  );
   assert.throws(
     () => parseAgentCommand("node ../outside.js"),
     (error) => error && error.code === "path_escape",
-  );
-  assert.throws(
-    () => parseAgentCommand("python3 script.py"),
-    (error) => error && error.code === "command_rejected",
   );
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-agent-terminal-test-"));

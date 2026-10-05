@@ -59,7 +59,7 @@ function executableInfo(program, finder = findExecutable) {
 function parseAgentCommand(command) {
   const text = String(command || "").trim();
   if (!text) throw sandboxError("invalid_args", "Agent terminal requires a command.");
-  if (/[\0\n\r;&|\`$<>\\\"']/.test(text) || text.includes("(") || text.includes(")")) {
+  if (/[\0\n\r;&|\`$<>\\\\"']/.test(text) || text.includes("(") || text.includes(")")) {
     throw sandboxError("command_rejected", "Agent terminal command contains shell syntax.");
   }
   if (text.includes("..")) {
@@ -70,17 +70,46 @@ function parseAgentCommand(command) {
   const program = parts.shift();
   const args = parts;
 
-  if (program === "npm" && args.length === 1 && args[0] === "test") {
-    return { program, args };
+  const safeRelative = (value) => {
+    const candidate = String(value || "");
+    return Boolean(
+      candidate
+      && !candidate.startsWith("-")
+      && !path.isAbsolute(candidate)
+      && !/^[A-Za-z]:[\\/]/.test(candidate)
+      && !candidate.includes("..")
+    );
+  };
+
+  if (program === "npm") {
+    if (args.length === 1 && args[0] === "test") return { program, args };
+    if (args.length === 2 && args[0] === "run" && /^[A-Za-z0-9:_-]+$/.test(args[1])) {
+      if (["start", "dev", "preview"].includes(args[1].toLowerCase())) {
+        throw sandboxError(
+          "process_required",
+          "Use process.start for long-running npm start/dev/preview scripts.",
+        );
+      }
+      return { program, args };
+    }
   }
 
   if (program === "node") {
-    const fileArgs = args.filter((item) => item !== "--check");
+    if (args.length === 1 && safeRelative(args[0])) return { program, args };
+    if (args.length === 2 && args[0] === "--check" && safeRelative(args[1])) return { program, args };
+    if (args.length <= 2 && args[0] === "--test" && (!args[1] || safeRelative(args[1]))) {
+      return { program, args };
+    }
+  }
+
+  if (program === "python3") {
+    if (args.length === 1 && safeRelative(args[0]) && /\.py$/i.test(args[0])) return { program, args };
     if (
-      fileArgs.length === 1
-      && !fileArgs[0].startsWith("-")
-      && !path.isAbsolute(fileArgs[0])
-      && !/^[A-Za-z]:[\\/]/.test(fileArgs[0])
+      args.length >= 2
+      && args.length <= 3
+      && args[0] === "-m"
+      && args[1] === "pytest"
+      && (!args[2] || safeRelative(args[2]))
     ) {
       return { program, args };
     }
@@ -88,7 +117,7 @@ function parseAgentCommand(command) {
 
   throw sandboxError(
     "command_rejected",
-    "Agent terminal is limited to the same controlled node and npm test commands approved by CodeMe.",
+    "Agent terminal supports short-lived node, npm, and python3 developer commands only.",
   );
 }
 

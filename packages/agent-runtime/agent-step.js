@@ -15,6 +15,7 @@ const CORE_TOOL_NAMES = new Set([
   "workspace.inspect",
   "dir.list",
   "file.read",
+  "terminal.run",
   "file.patch",
   "file.write",
   "repo.search",
@@ -87,7 +88,7 @@ function selectToolsForTask(tools, messages, options = {}) {
   for (const name of usedToolNames(messages)) selected.add(name);
 
   const editIntent = /\b(edit|change|update|write|create|add|remove|delete|fix|repair|implement|build|make|rename|refactor|restyle|redesign)\b/i.test(text);
-  const codeIntent = editIntent || /\b(code|coding|debug|compile|build|test|lint|diagnostic|implementation)\b/i.test(text);
+  const codeIntent = editIntent || /\b(code|coding|debug|compile|build|test|lint|diagnostic|implementation|terminal|command|npm|node|python|dependency|dependencies|package)\b/i.test(text);
   const webIntent = /\b(website|web site|webpage|frontend|front-end|html|css|browser|preview|page|button|form|click|serve|server|run|start|launch)\b/i.test(text);
   const documentIntent = /\b(document|docx|word|pdf)\b/i.test(text);
   const memoryIntent = /\b(memory|remember|recall|project brain|long[- ]term context)\b/i.test(text);
@@ -142,7 +143,21 @@ function selectToolsForTask(tools, messages, options = {}) {
     }
   }
 
-  const filtered = offered.filter((tool) => selected.has(String(tool && tool.name || "")));
+  const filtered = offered
+    .filter((tool) => selected.has(String(tool && tool.name || "")))
+    .map((tool) => {
+      if (String(tool && tool.name || "") !== "terminal.run") return tool;
+      return {
+        ...tool,
+        description:
+          "Run one short sandboxed developer command in the live workspace. "
+          + "Supported: npm test, npm run <script> (except start/dev/preview), "
+          + "node <file>, node --check <file>, node --test [file], "
+          + "python3 <file.py>, and python3 -m pytest [path]. "
+          + "Use process.start for long-running website/dev servers. "
+          + "Shell pipes, redirects, backgrounding, command substitution, and network access are blocked.",
+      };
+    });
   return filtered.length ? filtered : offered.slice(0, threshold);
 }
 

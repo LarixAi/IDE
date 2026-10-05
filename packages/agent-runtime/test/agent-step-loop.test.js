@@ -48,9 +48,14 @@ async function main() {
   const cssNames = new Set(cssTools.map((tool) => tool.name));
   assert.ok(cssTools.length < broadTools.length, "CSS work should not receive the entire tool catalogue");
   assert.ok(cssNames.has("file.patch"));
+  assert.ok(cssNames.has("terminal.run"), "Code-mode CSS work should retain the terminal");
   assert.ok(cssNames.has("browser.check"));
   assert.ok(!cssNames.has("design.openpencil"));
   assert.ok(!cssNames.has("capability.invoke"));
+
+  const terminalTool = cssTools.find((tool) => tool.name === "terminal.run");
+  assert.match(terminalTool.description, /npm run <script>/i);
+  assert.match(terminalTool.description, /process\.start/i);
 
   const designTools = selectToolsForTask(broadTools, [{ role: "user", content: "Use OpenPencil to design a dashboard mockup." }]);
   assert.ok(designTools.some((tool) => tool.name === "design.openpencil"));
