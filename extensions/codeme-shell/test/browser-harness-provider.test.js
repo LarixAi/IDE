@@ -53,7 +53,7 @@ class FakeClient {
   assert.ok(tools[0].parameters.properties.action.enum.includes("page_info"));
   assert.ok(!tools[0].parameters.properties.action.enum.includes("start_recording"));
   assert.strictEqual(provider.status().status, "connected");
-  assert.strictEqual(provider.status().activeEngine, "current");
+  assert.strictEqual(provider.status().activeEngine, "browser-harness");
   assert.strictEqual(provider.status().replacementReady, false);
 
   const result = await provider.call("browser.harness", {
