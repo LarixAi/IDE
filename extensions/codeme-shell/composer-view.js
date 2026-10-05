@@ -193,6 +193,7 @@ function renderComposer(nonce) {
     #stop { flex: 0 0 24px; width: 24px; padding: 0; color: #aab3bf; }
     #send[hidden], #stop[hidden] { display: none; }
     #mic.on { color: #ff918b; }
+    #mic.busy { color: #d8ad59; animation: codeme-pulse 1.1s ease-in-out infinite; }
     .perm { display: none; }
 
     /* The chat view is a resizable Code - OSS sidebar. Mirror the V19 mock:
@@ -1527,10 +1528,17 @@ function renderComposer(nonce) {
     const hubFlags = document.getElementById("hub-flags");
     const hubToolList = document.getElementById("hub-tool-list");
     const thread = document.getElementById("thread");
-    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let rec = null;
     let listening = false;
-    let spoken = "";
+    let voiceBusy = false;
+    let voiceStream = null;
+    let voiceContext = null;
+    let voiceSource = null;
+    let voiceProcessor = null;
+    let voiceSilentGain = null;
+    let voiceChunks = [];
+    let voiceSampleRate = 0;
+    let activeVoiceId = "";
+    let voiceBackendStatus = null;
     let running = false;
     let sending = false;
     let requestId = "";
@@ -1625,58 +1633,168 @@ function renderComposer(nonce) {
       listening = on;
       mic.classList.toggle("on", on);
       mic.setAttribute("aria-pressed", on ? "true" : "false");
-      mic.title = on ? "Stop voice" : "Voice to text";
-      mic.setAttribute("aria-label", on ? "Stop voice" : "Voice to text");
+      mic.title = on ? "Stop local dictation" : voiceBusy ? "Transcribing locally…" : "Local voice dictation";
+      mic.setAttribute("aria-label", on ? "Stop local dictation" : "Local voice dictation");
     }
-    function stopVoice() {
-      if (rec) {
-        try { rec.stop(); } catch {}
+    function setVoiceBusy(on) {
+      voiceBusy = on;
+      mic.classList.toggle("busy", on);
+      mic.disabled = on;
+      if (!listening) mic.title = on ? "Transcribing locally…" : "Local voice dictation";
+    }
+    function mergeVoiceChunks(chunks) {
+      const length = chunks.reduce((sum, item) => sum + item.length, 0);
+      const merged = new Float32Array(length);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
       }
+      return merged;
+    }
+    function resampleVoice(input, inputRate, outputRate = 16000) {
+      if (!input.length || !inputRate || inputRate === outputRate) return input;
+      const ratio = inputRate / outputRate;
+      const length = Math.max(1, Math.round(input.length / ratio));
+      const output = new Float32Array(length);
+      for (let i = 0; i < length; i++) {
+        const position = i * ratio;
+        const left = Math.floor(position);
+        const right = Math.min(input.length - 1, left + 1);
+        const mix = position - left;
+        output[i] = input[left] * (1 - mix) + input[right] * mix;
+      }
+      return output;
+    }
+    function encodeVoiceWav(samples, sampleRate = 16000) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
+      const writeText = (offset, value) => {
+        for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+      };
+      writeText(0, "RIFF");
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeText(8, "WAVE");
+      writeText(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeText(36, "data");
+      view.setUint32(40, samples.length * 2, true);
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        const sample = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      }
+      return buffer;
+    }
+    function voiceBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunkSize)));
+      }
+      return btoa(binary);
+    }
+    function releaseVoiceCapture() {
+      try { if (voiceProcessor) voiceProcessor.disconnect(); } catch {}
+      try { if (voiceSource) voiceSource.disconnect(); } catch {}
+      try { if (voiceSilentGain) voiceSilentGain.disconnect(); } catch {}
+      if (voiceStream) {
+        try { voiceStream.getTracks().forEach((track) => track.stop()); } catch {}
+      }
+      if (voiceContext) {
+        try { voiceContext.close(); } catch {}
+      }
+      voiceStream = null;
+      voiceContext = null;
+      voiceSource = null;
+      voiceProcessor = null;
+      voiceSilentGain = null;
+    }
+    async function stopVoice() {
+      if (!listening) return;
       setMic(false);
+      releaseVoiceCapture();
+      const merged = mergeVoiceChunks(voiceChunks);
+      voiceChunks = [];
+      if (merged.length < Math.max(1600, Math.floor(voiceSampleRate / 10))) {
+        notice.textContent = "No speech was captured.";
+        return;
+      }
+      const pcm = resampleVoice(merged, voiceSampleRate, 16000);
+      const wav = encodeVoiceWav(pcm, 16000);
+      activeVoiceId = "voice_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+      setVoiceBusy(true);
+      notice.textContent = "Transcribing locally…";
+      vscode.postMessage({
+        type: "voice-transcribe",
+        voiceId: activeVoiceId,
+        audioBase64: voiceBase64(wav),
+        mimeType: "audio/wav",
+        sampleRate: 16000,
+      });
     }
-    function startVoice() {
-      const action = composerVoiceAction(listening, Boolean(Speech));
-      if (action === "unavailable") {
-        notice.textContent = "Voice to text is not available in this window.";
+    async function startVoice() {
+      if (voiceBusy) return;
+      if (listening) {
+        await stopVoice();
         return;
       }
-      if (action === "stop") {
-        stopVoice();
+      if (voiceBackendStatus && voiceBackendStatus.available === false) {
+        notice.textContent = "Local Whisper needs setup before voice dictation can run.";
         return;
       }
-      rec = new Speech();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = navigator.language || "en-GB";
-      spoken = prompt.value;
-      rec.onresult = (event) => {
-        let interim = "";
-        let done = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const piece = event.results[i][0].transcript;
-          if (event.results[i].isFinal) done += piece;
-          else interim += piece;
-        }
-        if (done) spoken = (spoken && !/\\s$/.test(spoken) ? spoken + " " : spoken) + done.trim();
-        prompt.value = [spoken, interim.trim()].filter(Boolean).join(spoken && interim ? " " : "");
-        prompt.dispatchEvent(new Event("input"));
-      };
-      rec.onerror = (event) => {
-        if (event.error === "not-allowed") notice.textContent = "Microphone access is blocked.";
-        else if (event.error !== "aborted" && event.error !== "no-speech") notice.textContent = "Voice to text stopped.";
-        setMic(false);
-      };
-      rec.onend = () => setMic(false);
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+        notice.textContent = "Microphone capture is not available in this CodeMe window.";
+        return;
+      }
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) {
+        notice.textContent = "Local audio capture is not available in this CodeMe window.";
+        return;
+      }
       try {
-        rec.start();
+        voiceStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        voiceContext = new AudioContext();
+        voiceSampleRate = voiceContext.sampleRate || 48000;
+        voiceSource = voiceContext.createMediaStreamSource(voiceStream);
+        voiceProcessor = voiceContext.createScriptProcessor(4096, 1, 1);
+        voiceSilentGain = voiceContext.createGain();
+        voiceSilentGain.gain.value = 0;
+        voiceChunks = [];
+        voiceProcessor.onaudioprocess = (event) => {
+          if (!listening) return;
+          const channel = event.inputBuffer.getChannelData(0);
+          voiceChunks.push(new Float32Array(channel));
+        };
+        voiceSource.connect(voiceProcessor);
+        voiceProcessor.connect(voiceSilentGain);
+        voiceSilentGain.connect(voiceContext.destination);
         setMic(true);
-        notice.textContent = "";
-      } catch {
-        notice.textContent = "Voice to text could not start.";
+        notice.textContent = "Listening locally… click the mic again when finished.";
+      } catch (error) {
+        releaseVoiceCapture();
         setMic(false);
+        const denied = error && (error.name === "NotAllowedError" || error.name === "SecurityError");
+        notice.textContent = denied
+          ? "Microphone access is blocked. Allow CodeMe microphone access in system settings."
+          : "Local voice dictation could not start.";
       }
     }
-    mic.addEventListener("click", startVoice);
+    mic.addEventListener("click", () => { startVoice(); });
     model.addEventListener("change", () => {
       const option = model.selectedOptions[0];
       if (!option || !option.dataset.provider) return;
@@ -2681,6 +2799,37 @@ function renderComposer(nonce) {
         sawState = true;
         applyState(message);
       }
+      if (message.type === "voice-status") {
+        voiceBackendStatus = message.status || null;
+        if (voiceBackendStatus && voiceBackendStatus.available === false) {
+          mic.title = "Local voice setup required";
+        }
+      }
+      if (message.type === "voice-result" && (!message.voiceId || message.voiceId === activeVoiceId)) {
+        setVoiceBusy(false);
+        activeVoiceId = "";
+        const spokenText = String(message.text || "").trim();
+        if (spokenText) {
+          const before = String(prompt.value || "");
+          prompt.value = before
+            ? before + (/\\s$/.test(before) ? "" : " ") + spokenText
+            : spokenText;
+          prompt.dispatchEvent(new Event("input"));
+          prompt.focus();
+          notice.textContent = message.cleaned
+            ? "Voice transcribed and cleaned locally."
+            : message.fallback
+              ? "Voice transcribed locally; cleanup fell back to the raw transcript."
+              : "Voice transcribed locally.";
+        } else {
+          notice.textContent = "Local Whisper returned no text.";
+        }
+      }
+      if (message.type === "voice-error" && (!message.voiceId || message.voiceId === activeVoiceId)) {
+        setVoiceBusy(false);
+        activeVoiceId = "";
+        notice.textContent = message.message || "Local voice dictation failed.";
+      }
       if (message.type === "submitting" && current(message)) {
         notice.textContent = "Understanding your request…";
       }
@@ -2733,6 +2882,7 @@ function renderComposer(nonce) {
       vscode.postMessage({ type: "ready" });
     }, 300);
     vscode.postMessage({ type: "ready" });
+    vscode.postMessage({ type: "voice-status" });
   </script>
 </body>
 </html>`;
