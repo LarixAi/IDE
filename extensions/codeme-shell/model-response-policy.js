@@ -175,6 +175,71 @@ function needsActionRetry(input, reply) {
   return calls.length === 0 && needsActionPolicy(input);
 }
 
+function successfulToolMessage(message, names) {
+  if (!message || message.role !== "tool" || !names.has(String(message.name || ""))) return false;
+  try {
+    const result = JSON.parse(String(message.content || "{}"));
+    return Boolean(result && result.ok === true);
+  } catch {
+    return false;
+  }
+}
+
+function selectVerificationRepairTools(tools, messages) {
+  const offered = Array.isArray(tools) ? tools : [];
+  const latest = latestUserText(messages);
+  if (!/^VERIFICATION FAILED/i.test(latest.trim())) return offered;
+
+  if (/Running website preview|Browser verification|browser\.check|process\.start|CodeMe-owned preview/i.test(latest)) {
+    const names = new Set([
+      "process.start",
+      "process.status",
+      "process.logs",
+      "browser.check",
+      "browser.interact",
+    ]);
+    const narrowed = offered.filter((tool) => names.has(String(tool && tool.name || "")));
+    return narrowed.length ? narrowed : offered;
+  }
+
+  return offered;
+}
+
+function verificationRecoveryPolicy(messages, tools) {
+  const latest = latestUserText(messages);
+  if (!/^VERIFICATION FAILED/i.test(latest.trim())) return "";
+
+  if (/Running website preview|Browser verification|browser\.check|process\.start|CodeMe-owned preview/i.test(latest)) {
+    const processReady = (Array.isArray(messages) ? messages : []).some((message) => (
+      successfulToolMessage(message, new Set(["process.start", "process.status"]))
+    ));
+    const offered = offeredNames({ tools });
+
+    if (processReady && offered.has("browser.check")) {
+      return [
+        "VERIFICATION REPAIR: the file changes are already applied.",
+        "A CodeMe-owned preview process is confirmed.",
+        "Call browser.check now.",
+        "Do not edit the files again and do not answer with final prose before the browser result.",
+      ].join(" ");
+    }
+
+    if (offered.has("process.start")) {
+      return [
+        "VERIFICATION REPAIR: the file changes are already applied.",
+        "The missing evidence is the running CodeMe-owned website preview.",
+        "Call process.start now with the default workspace start command.",
+        "After its tool result, the next visible turn must call browser.check.",
+        "If process.start fails, call process.logs next.",
+        "Do not edit the files again unless browser or process evidence identifies a source-code problem.",
+        "Do not answer with final prose while this verification item is still failing.",
+      ].join(" ");
+    }
+  }
+
+  return "VERIFICATION REPAIR: address the failed verification item with the relevant native tool before giving final prose.";
+}
+
 function availableToolsText(tools) {
   return (Array.isArray(tools) ? tools : [])
     .map((tool) => "- " + String(tool && tool.name || "") + ": " + String(tool && tool.description || "").split("\n")[0])
@@ -209,14 +274,18 @@ class ResponsePolicyProvider {
     let messages = Array.isArray(input && input.messages)
       ? input.messages.map((message) => ({ ...message }))
       : [];
-    const tools = selectToolsForTask(input && input.tools, messages);
+    let tools = selectToolsForTask(input && input.tools, messages);
+    tools = selectVerificationRepairTools(tools, messages);
     messages = rewriteAvailableTools(messages, tools);
     messages.push({ role: "system", content: RESPONSE_POLICY });
 
-    // Keep action guidance inside the same visible model turn. If the model
-    // still answers with prose, the canonical verifier owns the next repair turn.
+    // Keep action guidance inside the same visible model turn. If verification
+    // has already named the missing evidence, give the model the exact repair
+    // path and a narrow matching tool surface instead of letting it drift.
     if (needsActionPolicy({ ...input, messages, tools })) {
       messages.push({ role: "system", content: ACTION_REQUIRED_POLICY });
+      const repairPolicy = verificationRecoveryPolicy(messages, tools);
+      if (repairPolicy) messages.push({ role: "system", content: repairPolicy });
     }
 
     const reply = await this.provider.complete({ ...input, messages, tools });
@@ -244,6 +313,8 @@ module.exports = {
   needsActionPolicy,
   needsActionRetry,
   rewriteAvailableTools,
+  selectVerificationRepairTools,
+  verificationRecoveryPolicy,
   hasSuccessfulMutation,
   wrapResponsePolicy,
 };

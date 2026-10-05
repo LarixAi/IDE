@@ -2,7 +2,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { ConversationStore, cleanTitle } = require("../conversation-store");
+const { ConversationStore, cleanTitle, normalizeAssistantHistoryText } = require("../conversation-store");
 
 async function main() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "codeme-conversations-"));
@@ -40,6 +40,22 @@ async function main() {
   assert.strictEqual(restored.list(workspaceA).length, 2);
 
   assert.strictEqual(cleanTitle("  A title with\nmore detail  "), "A title with");
+
+  const brokenFailure = [
+    "I couldn't complete that. Done — I updated malformed file paths and confirmed the saved contents.",
+    "",
+    "Verification is still failing:",
+    "- Running website preview: Start or reuse the existing application process, then run browser.check against the CodeMe-owned preview before finishing.",
+  ].join("\n");
+  assert.strictEqual(
+    normalizeAssistantHistoryText(brokenFailure),
+    [
+      "I made the requested changes, but I could not finish verification.",
+      "",
+      "Verification still needs attention:",
+      "- Running website preview: Start or reuse the existing application process, then run browser.check against the CodeMe-owned preview before finishing.",
+    ].join("\n"),
+  );
 
   console.log("ok conversation store");
 }

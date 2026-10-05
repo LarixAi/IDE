@@ -2071,7 +2071,17 @@ function renderComposer(nonce) {
         chips.appendChild(chip);
       }
       const streamItems = state.stream || state.tools || [];
-      renderThread(state.thread || [], !running && Boolean(state.runId));
+      const failedVerificationRun = Boolean(
+        !running
+        && state.runId
+        && state.verification
+        && state.verification.status === "failed"
+      );
+      renderThread(
+        state.thread || [],
+        !running && Boolean(state.runId) && !failedVerificationRun,
+        failedVerificationRun,
+      );
       renderHistory(state.conversations || [], state.conversationId || "");
       newChat.disabled = running;
       historyToggle.disabled = running;
@@ -2746,8 +2756,51 @@ function renderComposer(nonce) {
       flushCode();
     }
 
+    function verificationFailureText(state) {
+      const files = Array.isArray(state.filesChanged) ? state.filesChanged.filter(Boolean) : [];
+      const tick = String.fromCharCode(96);
+      const names = files.slice(0, 4).map((file) => tick + String(file) + tick);
+      let intro = "I could not finish verification.";
+      if (names.length) {
+        const joined = names.length === 1
+          ? names[0]
+          : names.length === 2
+            ? names[0] + " and " + names[1]
+            : names.slice(0, -1).join(", ") + ", and " + names[names.length - 1];
+        intro = "I changed " + joined + ", but I could not finish verification.";
+      }
+
+      const raw = String(state && state.outcome && state.outcome.summary || "");
+      const marker = "Verification is still failing:";
+      const markerAt = raw.lastIndexOf(marker);
+      const detail = markerAt >= 0
+        ? raw.slice(markerAt + marker.length).trim()
+        : String(state && state.verification && state.verification.summary || "").trim();
+
+      return detail
+        ? intro + "\\n\\nVerification still needs attention:\\n" + detail
+        : intro;
+    }
+
     function renderResult(state) {
       result.innerHTML = "";
+      const verificationFailed = Boolean(state.verification && state.verification.status === "failed");
+      if (verificationFailed) {
+        const final = document.createElement("div");
+        final.className = "bubble assistant";
+        renderMarkdownText(final, verificationFailureText(state));
+        result.appendChild(final);
+        return;
+      }
+
+      if (state.stage === "Failed") {
+        const summary = document.createElement("p");
+        summary.className = "error";
+        summary.textContent = "I couldn't complete that. Open technical activity for the failure details.";
+        result.appendChild(summary);
+        return;
+      }
+
       if (deferredFinal) {
         const final = document.createElement("div");
         final.className = "bubble assistant";
@@ -2755,7 +2808,7 @@ function renderComposer(nonce) {
         result.appendChild(final);
       } else if (state.stage !== "Complete") {
         const summary = document.createElement("p");
-        summary.className = state.stage === "Failed" ? "error" : "result-summary";
+        summary.className = "result-summary";
         summary.textContent = outcomeText(state);
         result.appendChild(summary);
       } else {
@@ -2767,20 +2820,14 @@ function renderComposer(nonce) {
           result.appendChild(final);
         }
       }
-
-      if (state.verification && state.verification.status === "failed") {
-        const verify = document.createElement("p");
-        verify.className = "error";
-        verify.textContent = "Verification issue" + (state.verification.summary ? " — " + state.verification.summary : "");
-        result.appendChild(verify);
-      }
     }
-    function renderThread(items, deferLastAssistant) {
+    function renderThread(items, deferLastAssistant, hideLastAssistant) {
       messages.innerHTML = "";
       deferredFinal = "";
       const shown = Array.isArray(items) ? items.slice() : [];
-      if (deferLastAssistant && shown.length && shown[shown.length - 1].role === "assistant") {
-        deferredFinal = String(shown.pop().text || "");
+      if ((deferLastAssistant || hideLastAssistant) && shown.length && shown[shown.length - 1].role === "assistant") {
+        const finalText = String(shown.pop().text || "");
+        if (deferLastAssistant && !hideLastAssistant) deferredFinal = finalText;
       }
       for (const item of shown) addMessage(item.role, item.text);
     }

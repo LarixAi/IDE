@@ -65,7 +65,8 @@ class ConversationStore {
   append(id, workspace, message) {
     const normalized = normalizeWorkspace(workspace);
     const role = message && message.role === "assistant" ? "assistant" : "user";
-    const text = String(message && message.text || "").trim();
+    const rawText = String(message && message.text || "").trim();
+    const text = role === "assistant" ? normalizeAssistantHistoryText(rawText) : rawText;
     if (!id || !text) return null;
 
     const data = this.read();
@@ -166,11 +167,34 @@ function normalizeConversation(value) {
   };
 }
 
+function normalizeAssistantHistoryText(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const marker = "Verification is still failing:";
+  const markerAt = text.lastIndexOf(marker);
+  if (markerAt >= 0) {
+    const before = text.slice(0, markerAt);
+    const detail = text.slice(markerAt + marker.length).trim();
+    const changed = /\b(changed|updated|applied|wrote|created|edited)\b/i.test(before);
+    const intro = changed
+      ? "I made the requested changes, but I could not finish verification."
+      : "I could not finish verification.";
+    return detail
+      ? intro + "\n\nVerification still needs attention:\n" + detail
+      : intro;
+  }
+
+  return text;
+}
+
 function normalizeMessage(value) {
   if (!value || !String(value.text || "").trim()) return null;
   return {
     role: value.role === "assistant" ? "assistant" : "user",
-    text: String(value.text).trim(),
+    text: value.role === "assistant"
+      ? normalizeAssistantHistoryText(value.text)
+      : String(value.text).trim(),
     at: String(value.at || ""),
     runId: String(value.runId || ""),
   };
@@ -194,4 +218,5 @@ function cloneConversation(value) {
 module.exports = {
   ConversationStore,
   cleanTitle,
+  normalizeAssistantHistoryText,
 };

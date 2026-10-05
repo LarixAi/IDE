@@ -9,6 +9,8 @@ const {
   hasRepeatedPhrase,
   looksCorruptedAssistantText,
   normalizeAssistantText,
+  selectVerificationRepairTools,
+  verificationRecoveryPolicy,
 } = require("../model-response-policy");
 
 (async () => {
@@ -142,6 +144,54 @@ const {
   assert.strictEqual(verificationAttempts, 1, "verification repair must not hide another model call");
   assert.strictEqual(verificationReply.toolCalls.length, 0);
   assert.ok(verificationMessages.some((message) => /ACTION REQUIRED/.test(String(message.content || ""))));
+
+  let previewRepairInput = null;
+  const previewRepairProvider = new ResponsePolicyProvider({
+    name: "fixture",
+    async complete(input) {
+      previewRepairInput = input;
+      return { text: "", toolCalls: [{ name: "process.start", args: {} }] };
+    },
+  });
+  await previewRepairProvider.complete({
+    model: "fixture",
+    messages: [
+      { role: "user", content: "Fix the website CSS." },
+      { role: "tool", name: "file.patch", content: JSON.stringify({ ok: true, data: { changed: true } }) },
+      {
+        role: "user",
+        content:
+          "VERIFICATION FAILED (repair round 1/2).\n"
+          + "- Running website preview: Start or reuse the existing application process, then run browser.check against the CodeMe-owned preview before finishing.",
+      },
+    ],
+    tools: [
+      { name: "file.read", parameters: { type: "object", properties: {} } },
+      { name: "file.patch", parameters: { type: "object", properties: {} } },
+      { name: "terminal.run", parameters: { type: "object", properties: {} } },
+      { name: "process.start", parameters: { type: "object", properties: {} } },
+      { name: "process.status", parameters: { type: "object", properties: {} } },
+      { name: "process.logs", parameters: { type: "object", properties: {} } },
+      { name: "browser.check", parameters: { type: "object", properties: {} } },
+    ],
+  });
+  assert.deepStrictEqual(
+    previewRepairInput.tools.map((tool) => tool.name).sort(),
+    ["browser.check", "process.logs", "process.start", "process.status"].sort(),
+  );
+  assert.ok(previewRepairInput.messages.some((message) => /Call process\.start now/i.test(String(message.content || ""))));
+  assert.ok(!previewRepairInput.tools.some((tool) => tool.name === "file.patch"));
+  assert.ok(selectVerificationRepairTools(
+    previewRepairInput.tools,
+    [{ role: "user", content: "VERIFICATION FAILED. Browser verification: run process.start then browser.check." }],
+  ).some((tool) => tool.name === "browser.check"));
+  assert.match(
+    verificationRecoveryPolicy(
+      [{ role: "user", content: "VERIFICATION FAILED. Browser verification: run process.start then browser.check." }],
+      previewRepairInput.tools,
+    ),
+    /process\.start/i,
+  );
 
   console.log("ok model response policy, capability grounding, and garbled-text recovery");
 })().catch((error) => {

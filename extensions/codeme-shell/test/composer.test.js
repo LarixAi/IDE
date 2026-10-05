@@ -271,6 +271,8 @@ async function main() {
   assert.ok(!goal.includes(ANCHOR));
 
   const html = renderComposer("nonce-value");
+  assert.ok(html.includes("verificationFailureText"), "failed verification should use deterministic UI text");
+  assert.ok(html.includes("failedVerificationRun"), "failed verification should hide malformed final assistant prose");
   assert.ok(html.includes("nonce-nonce-value"));
   assert.ok(html.includes("composerKeyAction"));
   assert.ok(html.includes("Ask CodeMe anything, @ files or type /"));
