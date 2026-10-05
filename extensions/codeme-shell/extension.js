@@ -1090,10 +1090,11 @@ class ComposerViewProvider {
       listTools: async (signal) => {
         const listed = await this.externalTools.listTools(signal);
         if (!Array.isArray(listed)) return [];
+        const filtered = listed.filter((tool) => tool && tool.name !== "browser.harness");
         if (this.session && this.session.composerMode === "research") {
-          return listed.filter((tool) => tool && tool.name !== "research.engineer");
+          return filtered.filter((tool) => tool && tool.name !== "research.engineer");
         }
-        return listed;
+        return filtered;
       },
       call: (name, args, signal) => this.externalTools.call(name, args, signal),
     };
@@ -1173,7 +1174,7 @@ class ComposerViewProvider {
         const legacyBrowserEnabled = Boolean(
           values.browser && values.browser.legacyBrowserEnabled === true,
         );
-        const browserOptions = { legacyBrowserEnabled };
+        const browserOptions = { legacyBrowserEnabled, browserHarness: this.browserHarness };
         if (mode === "controlled" && composerMode === "debug") {
           return new ToolRegistry(new DebugToolProvider(host, browserOptions));
         }
