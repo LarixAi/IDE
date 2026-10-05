@@ -1,6 +1,7 @@
 "use strict";
 
 const { ControlledToolProvider } = require("../../packages/agent-runtime/tool-registry");
+const { callLogicalBrowserTool } = require("./browser-harness-logical-tools");
 
 const MUTATION_TOOLS = new Set(["file.write", "file.patch", "dir.create"]);
 const LEGACY_BROWSER_TOOLS = new Set(["browser.check", "browser.interact"]);
@@ -64,6 +65,7 @@ class DebugToolProvider extends ControlledToolProvider {
   constructor(host, options = {}) {
     super(host);
     this.legacyBrowserEnabled = options.legacyBrowserEnabled !== false;
+    this.browserHarness = options.browserHarness || null;
     this.failureCheck = null;
     this.failureObserved = false;
     this.recheckRequired = false;
@@ -71,21 +73,16 @@ class DebugToolProvider extends ControlledToolProvider {
   }
 
   definitions() {
-    return super.definitions().filter(
-      (tool) => this.legacyBrowserEnabled || !LEGACY_BROWSER_TOOLS.has(tool && tool.name),
-    );
+    return super.definitions();
   }
 
   async call(name, args) {
     if (!this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)) {
-      return {
-        ok: false,
-        tool: name,
-        error: {
-          code: "legacy_browser_disabled",
-          message: "The legacy CodeMe browser runner is disabled while Browser Harness is under migration testing.",
-        },
-      };
+      return callLogicalBrowserTool(
+        { host: this.host, browserHarness: this.browserHarness },
+        name,
+        args || {},
+      );
     }
 
     if (MUTATION_TOOLS.has(name) && !this.failureObserved) {
