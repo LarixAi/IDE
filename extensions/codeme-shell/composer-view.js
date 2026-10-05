@@ -2553,8 +2553,8 @@ function renderComposer(nonce) {
       if (item.name === "document.edit") return (live ? "Editing document " : "Edited document ") + (item.path || "document");
       if (item.name === "file.write" || item.name === "file.patch") return (live ? "Editing " : "Edited ") + (item.path || "file");
       if (item.name === "repo.search") return (live ? "Searching " : "Searched ") + (item.path || "workspace");
-      if (item.name === "tests.run") return live ? "Running tests" : "Tests";
-      if (item.name === "terminal.run") return item.command || (live ? "Running command" : "Command");
+      if (item.name === "tests.run") return live ? "Sandbox · Running tests" : "Sandbox · Tests";
+      if (item.name === "terminal.run") return "Sandbox · " + (item.command || (live ? "Running command" : "Command"));
       if (item.name === "sandbox.run") return item.command || (live ? "Running sandbox" : "Sandbox");
       if (item.name === "process.start") {
         if (!live && item.suppressed && item.reused) return "Reused preview process";
