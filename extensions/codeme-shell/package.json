@@ -1,8 +1,8 @@
 {
   "name": "codeme-shell",
   "displayName": "CodeMe",
-  "description": "CodeMe native V19 workbench on Code - OSS.",
-  "version": "0.1.0",
+  "description": "CodeMe current native workbench on Code - OSS.",
+  "version": "0.2.0",
   "publisher": "codeme",
   "engines": {
     "vscode": "^1.139.0"

@@ -46,8 +46,25 @@ if [ -f "$icon_src" ] && [ -f "$icon_dest" ] && ! cmp -s "$icon_src" "$icon_dest
 fi
 
 ext_dir="$root/.tools/codeme-extensions"
+extension_manifest="$root/extensions/codeme-shell/package.json"
+extension_version=$("$node_bin/node" -p "require(process.argv[1]).version" "$extension_manifest")
+extension_link="$ext_dir/codeme.codeme-shell-$extension_version"
 mkdir -p "$ext_dir"
-ln -sfn "$root/extensions/codeme-shell" "$ext_dir/codeme.codeme-shell-0.1.0"
+
+# Keep exactly one CodeMe shell registration. Reusing the same 0.1.0 directory
+# let a running/stale extension host keep rendering an older Composer UI after a
+# source update. A versioned link plus stale-link cleanup makes the current UI
+# the only CodeMe extension candidate on the next launch.
+for stale in "$ext_dir"/codeme.codeme-shell-*; do
+	[ -e "$stale" ] || [ -L "$stale" ] || continue
+	[ "$stale" = "$extension_link" ] && continue
+	rm -rf "$stale"
+done
+ln -sfn "$root/extensions/codeme-shell" "$extension_link"
+
+ui_generation="current-v23"
+repo_revision=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || printf "unknown")
+printf "CodeMe: launching UI %s · extension %s · repo %s\n" "$ui_generation" "$extension_version" "$repo_revision" >&2
 
 export NODE_ENV=development
 export VSCODE_DEV=1

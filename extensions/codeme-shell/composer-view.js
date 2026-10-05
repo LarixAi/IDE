@@ -1241,8 +1241,14 @@ function renderComposer(nonce) {
       }
     }
 
-    /* Cursor-reference Composer V23
-       User-approved compact responsive composer layout. */
+    /* CodeMe Current UI — Cursor-reference Composer V23.
+       This is the supported visual contract. Older style layers above are
+       compatibility scaffolding only; these final rules always win. */
+    /* Keep legacy text workspace tabs out of the current chat header. */
+    header .workspace-actions {
+      display: none !important;
+    }
+
     /* Ensure proper box model across the composer */
     .unified-composer,
     .unified-composer *,
@@ -1409,7 +1415,7 @@ function renderComposer(nonce) {
 
 </style>
 </head>
-<body>
+<body data-codeme-ui="current-v23">
   <div class="shell">
     <header>
       <div class="title-tools">
