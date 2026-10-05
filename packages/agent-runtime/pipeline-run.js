@@ -9,6 +9,7 @@ const {
 const { buildModelContext } = require("./pipeline-context");
 const { instructionsForMode } = require("./pipeline-instructions");
 const { runAgentLoop } = require("./agent-loop");
+const { isExperimentalSelfTestEnabled, runPostMutationSelfTest } = require("./self-test-supervisor");
 const {
   addRequirement: brainAddRequirement,
   addDecision: brainAddDecision,
@@ -467,6 +468,10 @@ async function executePipelineRun(run, options, followUpQueue) {
     toolPolicy: "all-legal-tools",
     verification: "answer-then-verify-repair",
   };
+  const selfTestEnabled = run.mode !== "chat_only"
+    && run.mode !== "read_only"
+    && isExperimentalSelfTestEnabled(options);
+  run.pipeline.selfTest = selfTestEnabled ? "post-mutation-fast-checks" : "off";
   store.save(run);
 
   let workspace = null;
@@ -663,7 +668,35 @@ async function executePipelineRun(run, options, followUpQueue) {
       };
     }
 
+    let selfTestReport = null;
+    const mutationCandidate = { name: call.name, args: call.args, result };
+    if (
+      selfTestEnabled
+      && directedBy !== "verification"
+      && directedBy !== "self_test"
+      && appliedMutation(mutationCandidate)
+    ) {
+      selfTestReport = await runPostMutationSelfTest({ registry, workspace, definitions });
+      if (selfTestReport) {
+        const currentData = result && result.data && typeof result.data === "object" && !Array.isArray(result.data)
+          ? result.data
+          : {};
+        result = { ...result, data: { ...currentData, selfTest: selfTestReport.summary } };
+      }
+    }
+
     recordTool(run, call, result, directedBy || "model");
+    if (selfTestReport) {
+      if (!Array.isArray(run.selfTestHistory)) run.selfTestHistory = [];
+      run.selfTestHistory.push({ ...selfTestReport.summary, at: new Date().toISOString() });
+      for (const check of selfTestReport.records) {
+        recordTool(run, {
+          id: "call_" + crypto.randomBytes(4).toString("hex"),
+          name: check.name,
+          args: check.args || {},
+        }, check.result, "self_test");
+      }
+    }
     run.inFlight = null;
     run.lifecycle = directedBy === "verification" ? "verifying" : (previousLifecycle === "awaiting_model" ? "running" : "running");
     run.updatedAt = new Date().toISOString();

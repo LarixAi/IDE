@@ -12,3 +12,8 @@
 	path = vendor/learn-harness-engineering
 	url = https://github.com/walkinglabs/learn-harness-engineering.git
 	shallow = true
+
+[submodule "vendor/loop-testing"]
+	path = vendor/loop-testing
+	url = https://github.com/sdsrss/loop-testing.git
+	shallow = true
