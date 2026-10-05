@@ -28,6 +28,7 @@ const { loadProjectBrain, brainPath } = require("../../packages/agent-runtime/pr
 const { loadSkills } = require("../../packages/agent-runtime/skills");
 const { TerminalObserver } = require("./terminal-observer");
 const { ResearchEngineerProvider } = require("./research-engineer");
+const { CodeMeCapabilityManager } = require("./capability-manager");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -408,6 +409,9 @@ async function buildSettingsState({ scope, composer, paperclip, state }) {
     mcp: composer.externalTools && typeof composer.externalTools.snapshot === "function"
       ? composer.externalTools.snapshot()
       : { servers: [], status: [] },
+    capabilities: composer.capabilityManager && typeof composer.capabilityManager.catalog === "function"
+      ? composer.capabilityManager.catalog()
+      : { items: [], counts: { total: 0 } },
     paperclip: {
       ...paperclipStatus,
       apiUrl: paperclip.api && paperclip.api.baseUrl || "",
@@ -1028,6 +1032,28 @@ class ComposerViewProvider {
       this.terminalObserver,
       this.researchEngineer,
     ]);
+    this.capabilityManager = new CodeMeCapabilityManager({
+      getRoot: () => workspaceRoot(),
+      loadSkills,
+      getMcpRegistry: () => this.externalTools,
+      getNativeCapabilities: () => [
+        {
+          id: "research-engineer",
+          name: "Research Engineer",
+          status: this.researchEngineer && this.researchEngineer.enabled ? "connected" : "disabled",
+          connected: Boolean(this.researchEngineer && this.researchEngineer.enabled),
+          description: "Native bounded technical research across configured web, GitHub and npm sources.",
+        },
+        {
+          id: "project-brain",
+          name: "Project Brain",
+          status: workspaceRoot() ? "connected" : "unavailable",
+          connected: Boolean(workspaceRoot()),
+          description: "Durable project identity, requirements, decisions and verified lessons.",
+        },
+      ],
+    });
+    this.externalTools.addLocalProvider(this.capabilityManager);
     this.syncExternalPermissions();
     this.session = new ComposerSession({
       store: new RunStore(path.join(context.globalStorageUri.fsPath, "composer-runs")),
