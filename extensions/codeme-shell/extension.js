@@ -32,6 +32,7 @@ const { ResearchModeToolProvider } = require("./research-mode-tool-provider");
 const { CodeMeCapabilityManager } = require("./capability-manager");
 const { ContextUnderstanding } = require("./context-understanding");
 const { BrowserHarnessProvider } = require("./browser-harness-provider");
+const { OpenPencilProvider } = require("./openpencil-provider");
 const { VoiceDictationService } = require("./voice-dictation");
 const { agentTerminalSandboxStatus } = require("./agent-terminal-sandbox");
 const { analyzeImages } = require("./vision-integration");
@@ -74,6 +75,7 @@ function activate(context) {
       dispose: () => {
         if (composer.externalTools && typeof composer.externalTools.close === "function") composer.externalTools.close();
         if (composer.browserHarness && typeof composer.browserHarness.close === "function") composer.browserHarness.close();
+        if (composer.openPencil && typeof composer.openPencil.close === "function") composer.openPencil.close();
       },
     },
   );
@@ -449,6 +451,9 @@ async function buildSettingsState({ scope, composer, paperclip, state }) {
     browserHarness: composer.browserHarness && typeof composer.browserHarness.status === "function"
       ? composer.browserHarness.status()
       : { enabled: false, connected: false, status: "unavailable", replacementReady: false },
+    openPencil: composer.openPencil && typeof composer.openPencil.status === "function"
+      ? composer.openPencil.status()
+      : { enabled: false, connected: false, status: "unavailable", commandAvailable: false },
     terminalSandbox: agentTerminalSandboxStatus(),
     mcp: composer.externalTools && typeof composer.externalTools.snapshot === "function"
       ? composer.externalTools.snapshot()
@@ -1081,10 +1086,20 @@ class ComposerViewProvider {
         return Boolean(values.browser && values.browser.browserHarnessEnabled === true);
       },
     });
+    this.openPencil = new OpenPencilProvider({
+      getRoot: () => workspaceRoot(),
+      isEnabled: () => {
+        const values = settingsStore && typeof settingsStore.effectiveValues === "function"
+          ? settingsStore.effectiveValues()
+          : {};
+        return Boolean(values.design && values.design.openPencilEnabled === true);
+      },
+    });
     this.externalTools = new UniversalMcpRegistry(context, this.n8n, [
       this.terminalObserver,
       this.researchEngineer,
       this.browserHarness,
+      this.openPencil,
     ]);
     this.pipelineExternalTools = {
       listTools: async (signal) => {
@@ -1120,6 +1135,13 @@ class ComposerViewProvider {
           status: this.browserHarness.status().status,
           connected: this.browserHarness.status().connected,
           description: "MCP-backed browser control under harness-only migration testing. The legacy browser tools remain in source only as an explicit rollback path.",
+        },
+        {
+          id: "openpencil-ui-designer",
+          name: "UI Designer · OpenPencil",
+          status: this.openPencil.status().status,
+          connected: this.openPencil.status().connected,
+          description: "Local vector UI design through OpenPencil MCP: inspect, create, edit, lint, analyze, and export design documents.",
         },
         {
           id: "project-brain",
