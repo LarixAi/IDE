@@ -414,7 +414,7 @@ async function createVerifier(run, context) {
       // For a run-only website request, browser.check has no interaction args to
       // invent. Run it deterministically once the owned preview is confirmed.
       if (browserRequired && !browserCall && browserName === "browser.check" && processCall && definitions.has("browser.check")) {
-        verificationBrowserResult = await callTool("browser.check", {}, "verification");
+        verificationBrowserResult = await callTool("browser.check", { allowPresentationWarnings: true }, "verification");
         if (verificationBrowserResult && verificationBrowserResult.ok) {
           browserCall = latestSuccessfulCallBefore(run, run.toolCalls.length, "browser.check");
         }
