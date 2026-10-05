@@ -40,7 +40,6 @@ const READ_ONLY_BLOCKED = new Set([
   "sandbox.run",
   "process.start",
   "tests.run",
-  "browser.check",
   "browser.interact",
 ]);
 const CODE_FILE = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|go|rs|java|cs|rb|php|swift|dart|c|cc|cpp|h|hpp)$/i;
@@ -244,35 +243,6 @@ function latestSuccessfulCallBefore(run, endIndex, name) {
   return null;
 }
 
-function latestCallBefore(run, endIndex, name) {
-  const calls = Array.isArray(run && run.toolCalls) ? run.toolCalls : [];
-  const last = Math.min(Number(endIndex), calls.length - 1);
-  for (let index = last; index >= 0; index -= 1) {
-    const call = calls[index];
-    if (call && call.name === name) return call;
-  }
-  return null;
-}
-
-function processCallIsRunning(call) {
-  if (!call || !call.result || !call.result.ok) return false;
-  const data = call.result.data;
-  if (!data || typeof data !== "object") return call.name === "process.start";
-  const status = String(data.status || (data.session && data.session.status) || "").toLowerCase();
-  return status === "running" || (call.name === "process.start" && data.started === true);
-}
-
-function latestRunningProcessCall(run, endIndex) {
-  const calls = Array.isArray(run && run.toolCalls) ? run.toolCalls : [];
-  const last = Math.min(Number(endIndex), calls.length - 1);
-  for (let index = last; index >= 0; index -= 1) {
-    const call = calls[index];
-    if (!call || !["process.start", "process.status"].includes(call.name)) continue;
-    if (processCallIsRunning(call)) return call;
-  }
-  return null;
-}
-
 function latestOwnedPreviewUrl(run) {
   const calls = Array.isArray(run && run.toolCalls) ? run.toolCalls : [];
   for (let index = calls.length - 1; index >= 0; index -= 1) {
@@ -397,46 +367,20 @@ async function createVerifier(run, context) {
     if (isRunGoal(run)) {
       const browserRequired = isWebGoal(run.goal);
       const browserName = isInteractiveGoal(run.goal) ? "browser.interact" : "browser.check";
-      let browserCall = browserRequired
+      const browserCall = browserRequired
         ? latestSuccessfulCallBefore(run, run.toolCalls.length, browserName)
         : null;
-      let processCall = latestRunningProcessCall(run, run.toolCalls.length);
-
-      // Verification may safely inspect the CodeMe-owned process. This avoids
-      // spending a model turn just to rediscover an already-running preview.
-      if (!processCall && definitions.has("process.status")) {
-        const status = await callTool("process.status", {}, "verification");
-        const recorded = latestCallBefore(run, run.toolCalls.length, "process.status");
-        if (status && status.ok && processCallIsRunning(recorded)) processCall = recorded;
-      }
-
-      let verificationBrowserResult = null;
-      // For a run-only website request, browser.check has no interaction args to
-      // invent. Run it deterministically once the owned preview is confirmed.
-      if (browserRequired && !browserCall && browserName === "browser.check" && processCall && definitions.has("browser.check")) {
-        verificationBrowserResult = await callTool("browser.check", { allowPresentationWarnings: true }, "verification");
-        if (verificationBrowserResult && verificationBrowserResult.ok) {
-          browserCall = latestSuccessfulCallBefore(run, run.toolCalls.length, "browser.check");
-        }
-      }
+      const processCall = latestSuccessfulCallBefore(run, run.toolCalls.length, "process.start")
+        || latestSuccessfulCallBefore(run, run.toolCalls.length, "process.status");
 
       if (browserRequired) {
-        const latestBrowserAttempt = latestCallBefore(run, run.toolCalls.length, browserName);
         items.push({
           id: "run-browser",
           label: browserName === "browser.interact" ? "Running website interaction" : "Running website preview",
           ok: Boolean(browserCall),
           detail: browserCall
-            ? (browserCall.directedBy === "verification"
-              ? "CodeMe verified the already-running website in the owned browser preview"
-              : "The existing website was verified in the CodeMe-owned browser preview")
-            : verificationBrowserResult
-              ? "The automatic " + browserName + " failed: " + summarize(verificationBrowserResult)
-              : latestBrowserAttempt && latestBrowserAttempt.result && !latestBrowserAttempt.result.ok
-                ? "The last " + browserName + " failed: " + summarize(latestBrowserAttempt.result) + ". Repair that failure and retry verification."
-                : processCall
-                  ? "The application process is running, but " + browserName + " has not passed yet."
-                  : "Start or reuse the existing application process, then run " + browserName + " against the CodeMe-owned preview before finishing.",
+            ? "The existing website was verified in the CodeMe-owned browser preview"
+            : "Start or reuse the existing application process, then run " + browserName + " against the CodeMe-owned preview before finishing.",
         });
         if (browserCall) evidence.push(browserName);
       } else {
