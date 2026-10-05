@@ -37,6 +37,14 @@ assert.strictEqual(
   true,
 );
 assert.strictEqual(
+  isRetryableToolProtocolError(new Error("qwen2.5 tool call parsing failed")),
+  true,
+);
+assert.strictEqual(
+  isRetryableToolProtocolError(new Error("qwen3.5 tool call parsing failed")),
+  true,
+);
+assert.strictEqual(
   isRetryableToolProtocolError(new Error("model request returned 500: unrelated server failure")),
   false,
 );

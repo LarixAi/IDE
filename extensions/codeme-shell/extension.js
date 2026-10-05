@@ -39,12 +39,14 @@ const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
 let OllamaModelProvider;
+let OpenAICompatibleModelProvider;
 try {
   ({ N8nCapabilityProvider } = require("../../packages/n8n-capability"));
-  ({ OllamaModelProvider } = require("../../packages/agent-runtime/model-provider"));
+  ({ OllamaModelProvider, OpenAICompatibleModelProvider } = require("../../packages/agent-runtime/model-provider"));
 } catch {
   N8nCapabilityProvider = null;
   OllamaModelProvider = null;
+  OpenAICompatibleModelProvider = null;
 }
 
 function activate(context) {
@@ -946,12 +948,75 @@ async function discoverOllamaEndpoint(endpoint) {
   }
 }
 
+async function discoverOpenAIEndpoint(endpoint) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const headers = { accept: "application/json" };
+    if (endpoint.apiKey) headers.authorization = "Bearer " + endpoint.apiKey;
+    const response = await fetch(new URL("/v1/models", endpoint.url), {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error("model list returned HTTP " + response.status);
+    const body = await response.json();
+    const models = (Array.isArray(body.data) ? body.data : [])
+      .map((model) => String(model && model.id || "").trim())
+      .filter(Boolean)
+      .map((id) => ({
+        provider: endpoint.provider,
+        id,
+        source: endpoint.label,
+        label: endpoint.label + " · " + modelDisplayName(id),
+      }));
+    return {
+      source: {
+        id: endpoint.id,
+        label: endpoint.label,
+        configured: true,
+        available: true,
+        count: models.length,
+        message: models.length ? models.length + " model" + (models.length === 1 ? "" : "s") : "No models installed",
+        url: endpoint.url,
+      },
+      models,
+    };
+  } catch (error) {
+    const timedOut = error && (error.name === "AbortError" || error.name === "TimeoutError");
+    return {
+      source: {
+        id: endpoint.id,
+        label: endpoint.label,
+        configured: true,
+        available: false,
+        count: 0,
+        message: timedOut ? "Timed out after 6s" : (error instanceof Error ? error.message : String(error)),
+        url: endpoint.url,
+      },
+      models: [],
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function discoverConfiguredModels() {
   const localUrl = process.env.CODEME_LOCAL_OLLAMA_URL || process.env.CODEME_OLLAMA_URL || "http://127.0.0.1:11434";
-  const serverUrl = process.env.CODEME_SERVER_OLLAMA_URL || "";
+  const serverOllamaUrl = process.env.CODEME_SERVER_OLLAMA_URL || "";
+  const serverOpenAIUrl = process.env.CODEME_SERVER_OPENAI_URL || "";
   const endpoints = [
-    { id: "local", label: "Local", provider: "ollama-local", url: localUrl, configured: true },
-    { id: "server", label: "Server", provider: "ollama-server", url: serverUrl, configured: Boolean(serverUrl) },
+    { id: "local", label: "Local", provider: "ollama-local", protocol: "ollama", url: localUrl, configured: true },
+    { id: "server", label: "Server", provider: "ollama-server", protocol: "ollama", url: serverOllamaUrl, configured: Boolean(serverOllamaUrl) },
+    {
+      id: "server-openai",
+      label: "Server (OpenAI)",
+      provider: "openai-server",
+      protocol: "openai",
+      url: serverOpenAIUrl,
+      apiKey: process.env.CODEME_SERVER_OPENAI_API_KEY || "",
+      configured: Boolean(serverOpenAIUrl),
+    },
   ];
 
   const results = await Promise.all(endpoints.map(async (endpoint) => {
@@ -969,7 +1034,9 @@ async function discoverConfiguredModels() {
         models: [],
       };
     }
-    return discoverOllamaEndpoint(endpoint);
+    return endpoint.protocol === "openai"
+      ? discoverOpenAIEndpoint(endpoint)
+      : discoverOllamaEndpoint(endpoint);
   }));
 
   return {
@@ -1177,14 +1244,30 @@ class ComposerViewProvider {
         }
         if (selection.provider === "ollama-local" || selection.provider === "ollama") {
           const baseUrl = process.env.CODEME_LOCAL_OLLAMA_URL || process.env.CODEME_OLLAMA_URL || "http://127.0.0.1:11434";
-          return wrapResponsePolicy(wrapToolCallCompat(new OllamaModelProvider({ baseUrl })));
+          return wrapResponsePolicy(wrapToolCallCompat(new OllamaModelProvider({
+            baseUrl,
+            numCtx: process.env.CODEME_LOCAL_OLLAMA_NUM_CTX,
+          })));
         }
         if (selection.provider === "ollama-server") {
           const baseUrl = process.env.CODEME_SERVER_OLLAMA_URL;
           if (!baseUrl) {
             throw Object.assign(new Error("Remote Ollama server is not configured"), { code: "unknown_provider" });
           }
-          return wrapResponsePolicy(wrapToolCallCompat(new OllamaModelProvider({ baseUrl })));
+          return wrapResponsePolicy(wrapToolCallCompat(new OllamaModelProvider({
+            baseUrl,
+            numCtx: process.env.CODEME_SERVER_OLLAMA_NUM_CTX,
+          })));
+        }
+        if (selection.provider === "openai-server") {
+          const baseUrl = process.env.CODEME_SERVER_OPENAI_URL;
+          if (!baseUrl || !OpenAICompatibleModelProvider) {
+            throw Object.assign(new Error("OpenAI-compatible model server is not configured"), { code: "unknown_provider" });
+          }
+          return wrapResponsePolicy(wrapToolCallCompat(new OpenAICompatibleModelProvider({
+            baseUrl,
+            apiKey: process.env.CODEME_SERVER_OPENAI_API_KEY || "",
+          })));
         }
         throw Object.assign(new Error(`Provider ${selection.provider} is not connected`), { code: "unknown_provider" });
       },

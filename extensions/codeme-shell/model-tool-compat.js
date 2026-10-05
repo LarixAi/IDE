@@ -200,7 +200,7 @@ function isRetryableToolProtocolError(error) {
   const message = String(error && error.message || error || "");
   return (
     /expected element type\s*(?:<|\\u003c)function(?:>|\\u003e)\s*but have\s*(?:<|\\u003c)parameter(?:>|\\u003e)/i.test(message)
-    || /qwen(?:3(?:\.5)?)? tool call parsing failed/i.test(message)
+    || /qwen(?:[a-z0-9_.-]*)?\s+tool call parsing failed/i.test(message)
   );
 }
 
