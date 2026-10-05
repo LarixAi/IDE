@@ -10,10 +10,10 @@ const state = {
   },
   health: {
     browserHarness: {
-    enabled: false,
+    enabled: true,
     connected: false,
-    status: "disabled",
-    detail: "Browser Harness candidate is disabled. The current CodeMe browser runner remains active.",
+    status: "configured",
+    detail: "Browser Harness candidate is enabled and will be probed through MCP.",
     packageSpec: "browser-harness[mcp]==0.1.13",
     allowRecording: false,
     replacementReady: false,
@@ -107,8 +107,10 @@ assert.ok(html.includes("Workspace"));
 assert.ok(html.includes("Terminal"));
 assert.ok(html.includes("Browser &amp; Preview"));
 assert.ok(html.includes("Browser Harness candidate"));
-assert.ok(html.includes("Current CodeMe CDP runner"));
+assert.ok(html.includes("Browser Harness"));
 assert.ok(html.includes("No — testing"));
+assert.ok(html.includes("Legacy browser tools"));
+assert.ok(html.includes("Disabled"));
 assert.ok(html.includes("Git &amp; GitHub"));
 assert.ok(html.includes("Chat &amp; Activity"));
 assert.ok(html.includes("Permissions"));
