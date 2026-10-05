@@ -47,6 +47,25 @@ async function main() {
   }, networkEvidence);
   assert.deepStrictEqual(networkEvidence.failedRequests, ["net::ERR_CONNECTION_REFUSED"]);
 
+  const presentationEvidence = { pageErrors: [], failedRequests: [], httpErrors: [], networkWarnings: [] };
+  collectBrowserEvidence({
+    method: "Network.responseReceived",
+    params: {
+      type: "Image",
+      response: { status: 404, url: "http://127.0.0.1:4173/assets/hero-bg.jpg" },
+    },
+  }, presentationEvidence);
+  assert.deepStrictEqual(presentationEvidence.httpErrors, []);
+  assert.deepStrictEqual(presentationEvidence.networkWarnings, ["404 http://127.0.0.1:4173/assets/hero-bg.jpg"]);
+  collectBrowserEvidence({
+    method: "Network.responseReceived",
+    params: {
+      type: "Script",
+      response: { status: 404, url: "http://127.0.0.1:4173/js/app.js" },
+    },
+  }, presentationEvidence);
+  assert.deepStrictEqual(presentationEvidence.httpErrors, ["404 http://127.0.0.1:4173/js/app.js"]);
+
   const click = clickExpression("#actionBtn", "Click Me");
   assert.ok(click.includes("data-codeme-interaction-target"));
   assert.ok(click.includes("#actionBtn"));
@@ -97,6 +116,17 @@ async function main() {
     },
   }, errors);
   assert.deepStrictEqual(errors, ["broken click"]);
+  collectBrowserError({
+    method: "Log.entryAdded",
+    params: {
+      entry: {
+        level: "error",
+        url: "http://127.0.0.1:4173/assets/hero-bg.jpg",
+        text: "Failed to load resource: the server responded with a status of 404",
+      },
+    },
+  }, errors);
+  assert.deepStrictEqual(errors, ["broken click"], "missing presentation assets should stay warnings, not browser runtime errors");
 
   const executable = findBrowserExecutable();
   if (!executable || typeof WebSocket !== "function") {
