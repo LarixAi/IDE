@@ -1102,7 +1102,7 @@ class ComposerViewProvider {
           name: "Browser Harness",
           status: this.browserHarness.status().status,
           connected: this.browserHarness.status().connected,
-          description: "Experimental MCP-backed browser control candidate. The current browser.check remains authoritative until migration tests pass.",
+          description: "MCP-backed browser control under harness-only migration testing. The legacy browser tools remain in source only as an explicit rollback path.",
         },
         {
           id: "project-brain",
@@ -1151,14 +1151,23 @@ class ComposerViewProvider {
       },
       createRegistry: (mode) => {
         const composerMode = this.session && this.session.composerMode;
+        const values = settingsStore && typeof settingsStore.effectiveValues === "function"
+          ? settingsStore.effectiveValues()
+          : {};
+        const legacyBrowserEnabled = Boolean(
+          values.browser && values.browser.legacyBrowserEnabled === true,
+        );
+        const browserOptions = { legacyBrowserEnabled };
         if (mode === "controlled" && composerMode === "debug") {
-          return new ToolRegistry(new DebugToolProvider(host));
+          return new ToolRegistry(new DebugToolProvider(host, browserOptions));
         }
         if (mode === "controlled" && composerMode === "test") {
-          return new ToolRegistry(new VerificationToolProvider(host));
+          return new ToolRegistry(new VerificationToolProvider(host, browserOptions));
         }
         return new ToolRegistry(
-          mode === "controlled" ? new CodeMeControlledToolProvider(host) : new ReadOnlyToolProvider(host),
+          mode === "controlled"
+            ? new CodeMeControlledToolProvider(host, browserOptions)
+            : new ReadOnlyToolProvider(host),
         );
       },
       capabilities: this.capabilities,
