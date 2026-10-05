@@ -44,6 +44,8 @@ class OllamaModelProvider extends ModelProvider {
     super("ollama");
     this.baseUrl = options.baseUrl || process.env.CODEME_OLLAMA_URL || "http://127.0.0.1:11434";
     this.timeoutMs = options.timeoutMs || 180000;
+    this.numCtx = options.numCtx;
+    this.numPredict = options.numPredict;
   }
 
   async listModels(options = {}) {
@@ -66,7 +68,10 @@ class OllamaModelProvider extends ModelProvider {
     if (input.signal) signals.push(input.signal);
     const signal = AbortSignal.any(signals);
     try {
-      const response = await postJson(this.baseUrl, "/api/chat", chatBody(input), signal);
+      const response = await postJson(this.baseUrl, "/api/chat", chatBody(input, {
+        numCtx: this.numCtx,
+        numPredict: this.numPredict,
+      }), signal);
       const decision = normalizeMessage(response.message || {}, input.tools || []);
       const promptTokens = typeof response.prompt_eval_count === "number" ? response.prompt_eval_count : null;
       const completionTokens = typeof response.eval_count === "number" ? response.eval_count : null;
@@ -91,7 +96,84 @@ class OllamaModelProvider extends ModelProvider {
   }
 }
 
-function chatBody(input) {
+class OpenAICompatibleModelProvider extends ModelProvider {
+  constructor(options = {}) {
+    super("openai-compatible");
+    this.baseUrl = options.baseUrl || process.env.CODEME_SERVER_OPENAI_URL || "";
+    this.apiKey = options.apiKey !== undefined ? options.apiKey : (process.env.CODEME_SERVER_OPENAI_API_KEY || "");
+    this.timeoutMs = options.timeoutMs || 180000;
+    this.maxTokens = options.maxTokens;
+  }
+
+  headers() {
+    return {
+      accept: "application/json",
+      ...(this.apiKey ? { authorization: "Bearer " + this.apiKey } : {}),
+    };
+  }
+
+  async listModels(options = {}) {
+    if (!this.baseUrl) return [];
+    try {
+      const body = await requestJson(this.baseUrl, "/v1/models", {
+        method: "GET",
+        headers: this.headers(),
+        timeoutMs: 4000,
+      });
+      return (Array.isArray(body.data) ? body.data : [])
+        .map((model) => {
+          const id = String(model && model.id || "").trim();
+          return id ? { provider: this.name, id, label: id } : null;
+        })
+        .filter(Boolean);
+    } catch (error) {
+      if (options && options.strict) throw error;
+      return [];
+    }
+  }
+
+  async complete(input) {
+    if (!this.baseUrl) {
+      throw Object.assign(new Error("OpenAI-compatible server is not configured"), { code: "model_disconnected" });
+    }
+    const timeoutMs = input.timeoutMs || this.timeoutMs;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signals = [timeoutSignal];
+    if (input.signal) signals.push(input.signal);
+    const signal = AbortSignal.any(signals);
+    try {
+      const response = await requestJson(this.baseUrl, "/v1/chat/completions", {
+        method: "POST",
+        headers: { ...this.headers(), "content-type": "application/json" },
+        body: openAIChatBody(input, { maxTokens: this.maxTokens }),
+        signal,
+      });
+      const message = response && Array.isArray(response.choices) && response.choices[0] && response.choices[0].message
+        ? response.choices[0].message
+        : {};
+      const decision = normalizeMessage(message, input.tools || []);
+      const usage = response && response.usage && typeof response.usage === "object" ? response.usage : {};
+      const promptTokens = Number(usage.prompt_tokens);
+      const completionTokens = Number(usage.completion_tokens);
+      if (Number.isFinite(promptTokens) || Number.isFinite(completionTokens)) {
+        decision.usage = {
+          promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+          completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+          total: Number.isFinite(Number(usage.total_tokens))
+            ? Number(usage.total_tokens)
+            : (Number.isFinite(promptTokens) ? promptTokens : 0) + (Number.isFinite(completionTokens) ? completionTokens : 0),
+        };
+      }
+      return decision;
+    } catch (error) {
+      if (input.signal && input.signal.aborted) throw Object.assign(new Error("model call cancelled"), { code: "cancelled" });
+      if (timeoutSignal.aborted) throw Object.assign(new Error("model request timed out"), { code: "timeout" });
+      throw Object.assign(new Error(error instanceof Error ? error.message : String(error)), { code: "model_disconnected" });
+    }
+  }
+}
+
+function chatBody(input, providerOptions = {}) {
   return {
     model: input.model,
     stream: false,
@@ -100,10 +182,36 @@ function chatBody(input) {
     tools: (input.tools || []).map(toOllamaTool),
     options: {
       temperature: 0,
-      num_ctx: boundedGenerationNumber(process.env.CODEME_OLLAMA_NUM_CTX, 32768, 8192, 262144),
-      num_predict: boundedGenerationNumber(process.env.CODEME_OLLAMA_NUM_PREDICT, 4096, 1024, 16384),
+      num_ctx: contextWindowForModel(input.model, providerOptions.numCtx),
+      num_predict: generationLimit(providerOptions.numPredict),
     },
   };
+}
+
+function modelSizeBillions(model) {
+  const text = String(model || "").toLowerCase();
+  const matches = [...text.matchAll(/(?:^|[:_-])(\d+(?:\.\d+)?)b(?:$|[:_.-])/g)];
+  if (!matches.length) return null;
+  const value = Number(matches[matches.length - 1][1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function contextWindowForModel(model, explicit) {
+  const configured = explicit !== undefined && explicit !== null && String(explicit).trim() !== ""
+    ? explicit
+    : process.env.CODEME_OLLAMA_NUM_CTX;
+  if (configured !== undefined && configured !== null && String(configured).trim() !== "") {
+    return boundedGenerationNumber(configured, 32768, 8192, 262144);
+  }
+  const size = modelSizeBillions(model);
+  return size !== null && size >= 14 ? 16384 : 32768;
+}
+
+function generationLimit(explicit) {
+  const configured = explicit !== undefined && explicit !== null && String(explicit).trim() !== ""
+    ? explicit
+    : process.env.CODEME_OLLAMA_NUM_PREDICT;
+  return boundedGenerationNumber(configured, 4096, 1024, 16384);
 }
 
 function boundedGenerationNumber(raw, fallback, min, max) {
@@ -127,6 +235,53 @@ function toOllamaMessage(message) {
     };
   }
   return { role: message.role, content: message.content || "" };
+}
+
+function findPriorToolCallId(messages, index, name) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const message = messages[cursor];
+    if (!message || message.role !== "assistant") continue;
+    const calls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+    for (let callIndex = calls.length - 1; callIndex >= 0; callIndex -= 1) {
+      const call = calls[callIndex];
+      if (call && call.name === name && call.id) return String(call.id);
+    }
+  }
+  return "";
+}
+
+function toOpenAIMessage(message, index, messages) {
+  if (message.role === "tool") {
+    const id = message.toolCallId || findPriorToolCallId(messages, index, message.name);
+    return { role: "tool", ...(id ? { tool_call_id: id } : {}), content: String(message.content || "") };
+  }
+  if (message.role === "assistant" && message.toolCalls && message.toolCalls.length) {
+    return {
+      role: "assistant",
+      content: message.content || "",
+      tool_calls: message.toolCalls.map((call, callIndex) => ({
+        id: call.id || "call_" + index + "_" + callIndex,
+        type: "function",
+        function: {
+          name: PROVIDER_NAMES[call.name] || call.name,
+          arguments: JSON.stringify(call.args || {}),
+        },
+      })),
+    };
+  }
+  return { role: message.role, content: message.content || "" };
+}
+
+function openAIChatBody(input, providerOptions = {}) {
+  const messages = Array.isArray(input.messages) ? input.messages : [];
+  return {
+    model: input.model,
+    stream: false,
+    temperature: 0,
+    messages: messages.map((message, index) => toOpenAIMessage(message, index, messages)),
+    tools: (input.tools || []).map(toOllamaTool),
+    max_tokens: boundedGenerationNumber(providerOptions.maxTokens ?? process.env.CODEME_OPENAI_MAX_TOKENS, 4096, 256, 32768),
+  };
 }
 
 function toOllamaTool(tool) {
@@ -206,9 +361,28 @@ function directCapabilityCall(providerName, args, offeredTools) {
   return { name: "capability.invoke", args: wrapped };
 }
 
+function normalizeToolArguments(offered, value, parsedSource = null) {
+  const args = value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+  const source = parsedSource && typeof parsedSource === "object" && !Array.isArray(parsedSource) ? parsedSource : args;
+  if (offered && offered.name === "file.write") {
+    if (!Object.prototype.hasOwnProperty.call(args, "contents")) {
+      if (typeof args.content === "string") args.contents = args.content;
+      else if (typeof source.content === "string") args.contents = source.content;
+    }
+    delete args.content;
+  }
+  if (offered && offered.name === "file.patch") {
+    for (const [from, to] of [["old_text", "oldText"], ["new_text", "newText"], ["old_content", "oldText"], ["new_content", "newText"]]) {
+      if (!Object.prototype.hasOwnProperty.call(args, to) && typeof args[from] === "string") args[to] = args[from];
+      delete args[from];
+    }
+  }
+  return args;
+}
+
 function normalizeNativeToolCall(providerName, rawArgs, offeredTools) {
   if (!providerName) return null;
-  const args = parseToolArguments(rawArgs);
+  const parsedArgs = parseToolArguments(rawArgs);
   const contractName = CONTRACT_NAMES[providerName] || providerName;
   const offered = (offeredTools || []).find((tool) => (
     tool
@@ -218,10 +392,11 @@ function normalizeNativeToolCall(providerName, rawArgs, offeredTools) {
     )
   ));
   if (offered) {
+    const args = normalizeToolArguments(offered, parsedArgs);
     if (!validToolArguments(args, offered.parameters)) return null;
     return { name: offered.name, args };
   }
-  return directCapabilityCall(providerName, args, offeredTools);
+  return directCapabilityCall(providerName, parsedArgs, offeredTools);
 }
 
 function contentToolCalls(content, offeredTools) {
@@ -229,6 +404,11 @@ function contentToolCalls(content, offeredTools) {
   const candidates = [];
 
   if (text.startsWith("{") && text.endsWith("}")) candidates.push(text);
+
+  for (const match of text.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)) {
+    const candidate = String(match[1] || "").trim();
+    if (candidate.startsWith("{") && candidate.endsWith("}")) candidates.push(candidate);
+  }
 
   for (const match of text.matchAll(/\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`/gi)) {
     const candidate = String(match[1] || "").trim();
@@ -301,17 +481,9 @@ function parseContentToolCall(text, offeredTools) {
       if (Object.prototype.hasOwnProperty.call(parsed, key)) args[key] = parsed[key];
     }
 
-    // Qwen commonly emits {"tool":"file.write","path":"...","content":"..."}
-    // even though CodeMe's canonical file.write field is "contents".
-    if (
-      offered.name === "file.write"
-      && !Object.prototype.hasOwnProperty.call(args, "contents")
-      && typeof parsed.content === "string"
-    ) {
-      args.contents = parsed.content;
-    }
   }
 
+  args = normalizeToolArguments(offered, args, parsed);
   if (!validToolArguments(args, offered.parameters)) return null;
   return { name: offered.name, args };
 }
@@ -350,6 +522,32 @@ function matchesSchemaType(value, type) {
 
 function stripThinking(text) {
   return String(text).replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+
+function requestJson(baseUrl, pathname, options = {}) {
+  const url = new URL(pathname, baseUrl);
+  const transport = url.protocol === "https:" ? https : http;
+  const payload = options.body === undefined ? "" : JSON.stringify(options.body);
+  const headers = { ...(options.headers || {}) };
+  if (payload) {
+    headers["content-type"] = headers["content-type"] || "application/json";
+    headers["content-length"] = Buffer.byteLength(payload);
+  }
+  return new Promise((resolve, reject) => {
+    const req = transport.request(url, { method: String(options.method || "GET").toUpperCase(), signal: options.signal, headers }, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error("model request returned " + res.statusCode + ": " + text.slice(0, 300)));
+        try { resolve(text ? JSON.parse(text) : {}); } catch (error) { reject(error); }
+      });
+    });
+    if (!options.signal && options.timeoutMs) req.setTimeout(Number(options.timeoutMs), () => { req.destroy(); reject(new Error("model request timed out")); });
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
 }
 
 function getJson(baseUrl, pathname) {
@@ -415,4 +613,4 @@ function postJson(baseUrl, pathname, body, signal) {
   });
 }
 
-module.exports = { ModelProvider, OllamaModelProvider };
+module.exports = { ModelProvider, OllamaModelProvider, OpenAICompatibleModelProvider, contextWindowForModel, contentToolCalls, normalizeNativeToolCall };

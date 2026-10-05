@@ -139,12 +139,22 @@ function isWorkspaceInventory(goal) {
     && /\b(files?|folders?|directory|workspace)\b/.test(text);
 }
 
+function normalizeIntentText(goal) {
+  return stripNegatedEditing(goal).toLowerCase()
+    .replace(/\b(?:wbsite|wbesite|webiste|wesbite|webstie|websit)\b/g, "website")
+    .replace(/\b(?:preveiw|previw|previe)\b/g, "preview")
+    .replace(/\b(?:aplication|applicaton)\b/g, "application")
+    .replace(/\s+/g, " ").trim();
+}
+function hasRunIntent(goal) {
+  const text = normalizeIntentText(goal);
+  return /\b(run|start|launch|serve|open|preview)\b/.test(text)
+    && /\b(existing|current|website|site|web app|app|application|project|server|preview|it|this|that)\b/.test(text);
+}
 function isRunGoal(goal) {
-  const text = stripNegatedEditing(goal).toLowerCase();
+  const text = normalizeIntentText(goal);
   if (/\b(create|make|build|scaffold|set up|setup|write|add)\b/.test(text)) return false;
-  const action = /\b(run|start|launch|serve|open)\b/.test(text);
-  const target = /\b(existing|current|website|site|web app|app|application|project|server|preview|it|this|that)\b/.test(text);
-  return action && target;
+  return hasRunIntent(text);
 }
 
 function isBuildGoal(goal) {
@@ -169,4 +179,4 @@ function strategyGuidance(strategy) {
   return (strategy && strategy.guidance) || STRATEGIES.general.guidance;
 }
 
-module.exports = { STRATEGIES, classifyTask, selectStrategy, strategyGuidance, folderNameFromGoal, isWorkspaceInventory, isReadAllFilesGoal, isLocalFollowUp, isRunGoal, isBuildGoal, isWebsiteBuild, isNewWebsite };
+module.exports = { STRATEGIES, classifyTask, selectStrategy, strategyGuidance, folderNameFromGoal, isWorkspaceInventory, isReadAllFilesGoal, isLocalFollowUp, normalizeIntentText, hasRunIntent, isRunGoal, isBuildGoal, isWebsiteBuild, isNewWebsite };

@@ -8,6 +8,7 @@ const {
   startPipelineRun,
 } = require("..");
 const { recoverTextToolCalls } = require("../pipeline-loop");
+const { hasRunIntent, isRunGoal: strategyIsRunGoal } = require("../strategy");
 
 class ScriptedProvider extends ModelProvider {
   constructor(steps) {
@@ -457,7 +458,41 @@ async function testRunWebsiteRequiresRealPreview() {
   assert.ok(run.toolCalls.some((call) => call.name === "process.start" && call.result && call.result.ok));
   assert.ok(run.toolCalls.some((call) => call.name === "browser.check" && call.result && call.result.ok));
   assert.ok(run.verification.evidence.includes("browser.check"));
-  assert.ok(run.repairs.some((item) => item.reason === "verification_failed"));
+  assert.ok(run.events.some((item) => item.type === "action_required"));
+}
+
+async function testRunTypoRequiresRealActions() {
+  assert.strictEqual(hasRunIntent("can you run the wbsite"), true);
+  assert.strictEqual(hasRunIntent("start the preveiw"), true);
+  assert.strictEqual(strategyIsRunGoal("run the tests"), false);
+  assert.strictEqual(strategyIsRunGoal("run diagnostics"), false);
+
+  const registry = new FakeRegistry();
+  const provider = new ScriptedProvider([
+    { text: "The website is running successfully at http://127.0.0.1:4173/.", toolCalls: [] },
+    { text: "", toolCalls: [{ name: "process.start", args: {} }] },
+    { text: "The website is running and verified.", toolCalls: [] },
+  ]);
+  const run = await startPipelineRun({
+    goal: "can you run the wbsite",
+    model: "fixture",
+    providerName: "fixture-local",
+    provider,
+    registry,
+    store: storeFor("run-typo"),
+    mode: "controlled",
+    composerMode: "code",
+    maxIterations: 8,
+  }).done;
+
+  assert.strictEqual(run.taskClass, "run");
+  assert.strictEqual(run.lifecycle, "completed");
+  assert.ok(run.events.some((event) => event.type === "action_required"));
+  assert.ok(run.toolCalls.some((call) => call.name === "process.start" && call.result && call.result.ok));
+  assert.ok(run.toolCalls.some((call) => call.name === "process.status" && call.directedBy === "verification"));
+  assert.ok(run.toolCalls.some((call) => call.name === "browser.check" && call.directedBy === "verification"));
+  assert.ok(run.verification.evidence.includes("process.status"));
+  assert.ok(run.verification.evidence.includes("browser.check"));
 }
 
 async function testExternalToolsStayVisibleAndUntrusted() {
@@ -582,6 +617,7 @@ async function main() {
   await testNoOpAfterBrowserDoesNotInvalidateVerification();
   await testVerifierReplaysBrowserAfterLaterRealEdit();
   await testRunWebsiteRequiresRealPreview();
+  await testRunTypoRequiresRealActions();
   await testExternalToolsStayVisibleAndUntrusted();
   await testLiveFollowUp();
   console.log("ok pipeline v2 cursor-style loop");

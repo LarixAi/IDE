@@ -150,6 +150,38 @@ function formatVerifyFailure(result) {
   return failed.join("\n") || String(result && result.summary || "Verification failed");
 }
 
+const ACTION_TOOLS = new Set([
+  "file.write", "file.patch", "document.create", "document.edit", "dir.create",
+  "terminal.run", "sandbox.run", "process.start", "process.status", "tests.run",
+  "browser.check", "browser.interact",
+]);
+function successfulActionResult(name, result) {
+  if (!ACTION_TOOLS.has(String(name || "")) || !result || !result.ok) return false;
+  const data = result.data && typeof result.data === "object" ? result.data : {};
+  if (data.suppressed === true) return false;
+  if (["file.write", "file.patch", "document.create", "document.edit"].includes(name) && data.changed === false) return false;
+  if (name === "process.status") {
+    const session = data.session && typeof data.session === "object" ? data.session : {};
+    const status = String(data.status || session.status || "").toLowerCase();
+    const pid = Number(data.pid || session.pid);
+    return ["running", "ready", "listening", "started"].includes(status)
+      || data.running === true || data.alive === true || session.running === true || session.alive === true
+      || (Number.isFinite(pid) && pid > 0 && !["failed", "stopped", "exited", "dead"].includes(status));
+  }
+  if (name === "browser.interact" && data.matched === false) return false;
+  return true;
+}
+function successfulActionCountFromMessages(messages) {
+  let count = 0;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!message || message.role !== "tool" || !ACTION_TOOLS.has(String(message.name || ""))) continue;
+    try {
+      if (successfulActionResult(message.name, JSON.parse(String(message.content || "{}")))) count += 1;
+    } catch {}
+  }
+  return count;
+}
+
 const READ_ONLY_EVIDENCE_TOOLS = new Set([
   "workspace.inspect",
   "dir.list",
@@ -251,6 +283,7 @@ async function runPipeline(options) {
   let repairs = resumed ? Number(resumed.repairs || 0) : 0;
   let toolCallCount = resumed ? Number(resumed.toolCallCount || 0) : 0;
   let finalText = resumed ? String(resumed.finalText || "") : "";
+  let successfulActionCount = successfulActionCountFromMessages(messages);
   let lastVerify = null;
   let lastCheckpoint = resumed
     ? { ...resumed, messages: messages.map((message) => ({ ...message })), agentEvents: agentEvents.map((event) => ({ ...event })) }
@@ -412,6 +445,18 @@ async function runPipeline(options) {
             "Model timed out after one compacted recovery retry. The run checkpoint was preserved so it can be resumed.",
           );
         }
+      } else if (error && error.code === "tool_protocol_error") {
+        onEvent({ type: "tool_protocol_error", turn, reason: error instanceof Error ? error.message : String(error) });
+        messages.push({
+          role: "user",
+          content:
+            "TOOL PROTOCOL ERROR: the model runtime rejected the previous tool-call syntax. "
+            + "This is a new visible agent turn, not a hidden retry. "
+            + "Issue exactly one native tool call using one of the currently available tool schemas. "
+            + "Do not describe the tool call in prose.",
+        });
+        saveCheckpoint();
+        continue;
       } else if (isConnectionLoss(error)) {
         saveCheckpoint();
         const delays = Array.isArray(options.reconnectDelaysMs) ? options.reconnectDelaysMs : DEFAULT_RECONNECT_DELAYS_MS;
@@ -488,6 +533,19 @@ async function runPipeline(options) {
         messages.push({
           role: "user",
           content: "Your reply was empty. Call a tool to make progress or give a final answer.",
+        });
+        continue;
+      }
+
+      if (options.actionRequired && successfulActionCount === 0) {
+        onEvent({ type: "action_required", turn, taskClass: String(options.taskClass || ""), rejectedText: text.slice(0, 800) });
+        messages.push({
+          role: "user",
+          content:
+            "ACTION REQUIRED: this controlled task requires real workspace/runtime evidence, "
+            + "but no successful action tool has run yet. Your prose result is rejected. "
+            + "Issue the required native tool call now (for example file.patch/file.write for edits, "
+            + "or process.start/process.status/browser.check for run/preview work).",
         });
         continue;
       }
@@ -584,6 +642,7 @@ async function runPipeline(options) {
 
       actionCounts.set(key, priorCount + 1);
       toolCallCount += 1;
+      if (successfulActionResult(call.name, result)) successfulActionCount += 1;
       if (
         readOnlyMode
         && result

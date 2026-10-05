@@ -9,6 +9,7 @@ const {
 const { buildModelContext } = require("./pipeline-context");
 const { instructionsForMode } = require("./pipeline-instructions");
 const { runAgentLoop } = require("./agent-loop");
+const { normalizeIntentText, hasRunIntent } = require("./strategy");
 const {
   addRequirement: brainAddRequirement,
   addDecision: brainAddDecision,
@@ -211,7 +212,7 @@ function wantsExhaustiveRead(goal) {
 }
 
 function isWebGoal(goal) {
-  return /\b(website|web site|webpage|page|layout|css|html|browser|preview|button|form|click|frontend|front-end|ui|ux)\b/i.test(String(goal || ""));
+  return /\b(website|web site|webpage|page|layout|css|html|browser|preview|button|form|click|frontend|front-end|ui|ux)\b/i.test(normalizeIntentText(goal));
 }
 
 function isInteractiveGoal(goal) {
@@ -220,10 +221,20 @@ function isInteractiveGoal(goal) {
 
 function isRunGoal(run) {
   if (run && run.taskClass === "run") return true;
-  const goal = String(run && run.goal || "");
-  if (hasEditIntent(goal)) return false;
-  return /\b(run|start|launch|serve|open)\b/i.test(goal)
-    && /\b(existing|current|website|site|web app|app|application|project|server|preview|it|this|that)\b/i.test(goal);
+  return hasRunIntent(run && run.goal);
+}
+function processResultIsRunning(result) {
+  if (!result || !result.ok) return false;
+  const data = result.data && typeof result.data === "object" ? result.data : {};
+  const session = data.session && typeof data.session === "object" ? data.session : {};
+  const status = String(data.status || session.status || "").toLowerCase();
+  if (["running", "ready", "listening", "started"].includes(status)) return true;
+  if (data.running === true || data.alive === true || session.running === true || session.alive === true) return true;
+  const pid = Number(data.pid || session.pid);
+  return Number.isFinite(pid) && pid > 0 && !["failed", "stopped", "exited", "dead"].includes(status);
+}
+function processCallIsRunning(call) {
+  return Boolean(call && processResultIsRunning(call.result));
 }
 
 function successfulCallAfter(run, startIndex, names) {
@@ -368,32 +379,49 @@ async function createVerifier(run, context) {
     if (isRunGoal(run)) {
       const browserRequired = isWebGoal(run.goal);
       const browserName = isInteractiveGoal(run.goal) ? "browser.interact" : "browser.check";
-      const browserCall = browserRequired
-        ? latestSuccessfulCallBefore(run, run.toolCalls.length, browserName)
-        : null;
-      const processCall = latestSuccessfulCallBefore(run, run.toolCalls.length, "process.start")
-        || latestSuccessfulCallBefore(run, run.toolCalls.length, "process.status");
+      let processCall = latestSuccessfulCallBefore(run, run.toolCalls.length, "process.status")
+        || latestSuccessfulCallBefore(run, run.toolCalls.length, "process.start");
+      if (!processCallIsRunning(processCall)) processCall = null;
+
+      if (definitions.has("process.status")) {
+        const status = await callTool("process.status", {}, "verification");
+        processCall = processResultIsRunning(status)
+          ? { name: "process.status", args: {}, result: status, directedBy: "verification" }
+          : null;
+      }
+
+      items.push({
+        id: "run-process",
+        label: "Running application process",
+        ok: Boolean(processCall),
+        detail: processCall
+          ? "CodeMe confirmed that its application process is alive"
+          : "Start the application with process.start. Verification will confirm it with process.status before finishing.",
+      });
+      if (processCall) evidence.push(processCall.name);
 
       if (browserRequired) {
+        let browserCall = latestSuccessfulCallBefore(run, run.toolCalls.length, browserName);
+        if (processCall && browserName === "browser.check" && definitions.has("browser.check")) {
+          const url = latestOwnedPreviewUrl(run);
+          if (url) {
+            const checked = await callTool("browser.check", { url }, "verification");
+            browserCall = checked && checked.ok
+              ? { name: "browser.check", args: { url }, result: checked, directedBy: "verification" }
+              : null;
+          }
+        }
         items.push({
           id: "run-browser",
           label: browserName === "browser.interact" ? "Running website interaction" : "Running website preview",
-          ok: Boolean(browserCall),
-          detail: browserCall
-            ? "The existing website was verified in the CodeMe-owned browser preview"
-            : "Start or reuse the existing application process, then run " + browserName + " against the CodeMe-owned preview before finishing.",
+          ok: Boolean(processCall && browserCall),
+          detail: processCall && browserCall
+            ? "The CodeMe-owned process is alive and the website was verified in the browser"
+            : !processCall
+              ? "The website process is not confirmed alive. Run process.start before browser verification."
+              : "Run " + browserName + " against the CodeMe-owned preview before finishing.",
         });
-        if (browserCall) evidence.push(browserName);
-      } else {
-        items.push({
-          id: "run-process",
-          label: "Running application process",
-          ok: Boolean(processCall),
-          detail: processCall
-            ? "The existing application process is running"
-            : "Start or confirm the existing application process with process.start or process.status before finishing.",
-        });
-        if (processCall) evidence.push(processCall.name);
+        if (processCall && browserCall) evidence.push(browserName);
       }
     }
 
@@ -701,6 +729,12 @@ async function executePipelineRun(run, options, followUpQueue) {
     mode: run.mode,
     composerMode: run.composerMode,
     goal: run.goal,
+    taskClass: run.taskClass,
+    actionRequired: run.mode === "controlled" && (
+      hasEditIntent(run.goal)
+      || hasRunIntent(run.goal)
+      || ["run", "layout", "build", "bug-fix", "feature", "folder"].includes(run.taskClass)
+    ),
     forceReadOnlyAnswerOnRepeat: true,
     readOnlyEvidenceLimit: run.mode === "read_only" && !wantsExhaustiveRead(run.goal)
       ? (options.readOnlyEvidenceLimit ?? 6)
