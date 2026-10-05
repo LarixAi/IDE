@@ -32,6 +32,7 @@ const { CodeMeCapabilityManager } = require("./capability-manager");
 const { ContextUnderstanding } = require("./context-understanding");
 const { BrowserHarnessProvider } = require("./browser-harness-provider");
 const { VoiceDictationService } = require("./voice-dictation");
+const { agentTerminalSandboxStatus } = require("./agent-terminal-sandbox");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -447,6 +448,7 @@ async function buildSettingsState({ scope, composer, paperclip, state }) {
     browserHarness: composer.browserHarness && typeof composer.browserHarness.status === "function"
       ? composer.browserHarness.status()
       : { enabled: false, connected: false, status: "unavailable", replacementReady: false },
+    terminalSandbox: agentTerminalSandboxStatus(),
     mcp: composer.externalTools && typeof composer.externalTools.snapshot === "function"
       ? composer.externalTools.snapshot()
       : { servers: [], status: [] },
