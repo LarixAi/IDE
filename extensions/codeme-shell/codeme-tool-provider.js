@@ -2,6 +2,8 @@
 
 const { ControlledToolProvider } = require("../../packages/agent-runtime/tool-registry");
 
+const LEGACY_BROWSER_TOOLS = new Set(["browser.check", "browser.interact"]);
+
 /**
  * CodeMe-specific additions to the canonical controlled tool definitions.
  *
@@ -10,8 +12,15 @@ const { ControlledToolProvider } = require("../../packages/agent-runtime/tool-re
  * asset warnings from failures that make the application unusable.
  */
 class CodeMeControlledToolProvider extends ControlledToolProvider {
+  constructor(host, options = {}) {
+    super(host);
+    this.legacyBrowserEnabled = options.legacyBrowserEnabled !== false;
+  }
+
   definitions() {
-    return super.definitions().map((tool) => {
+    return super.definitions()
+      .filter((tool) => this.legacyBrowserEnabled || !LEGACY_BROWSER_TOOLS.has(tool && tool.name))
+      .map((tool) => {
       if (!tool || tool.name !== "browser.check") return tool;
       const parameters = tool.parameters && typeof tool.parameters === "object"
         ? tool.parameters
@@ -37,6 +46,20 @@ class CodeMeControlledToolProvider extends ControlledToolProvider {
       };
     });
   }
+
+  async call(name, args) {
+    if (!this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)) {
+      return {
+        ok: false,
+        tool: name,
+        error: {
+          code: "legacy_browser_disabled",
+          message: "The legacy CodeMe browser runner is disabled while Browser Harness is under migration testing.",
+        },
+      };
+    }
+    return super.call(name, args);
+  }
 }
 
-module.exports = { CodeMeControlledToolProvider };
+module.exports = { CodeMeControlledToolProvider, LEGACY_BROWSER_TOOLS };
