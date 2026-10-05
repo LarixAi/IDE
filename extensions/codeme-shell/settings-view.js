@@ -244,6 +244,9 @@ function renderPanel(id, state, values) {
     const mcp = state.mcp || { servers: [], status: [] };
     const servers = Array.isArray(mcp.servers) ? mcp.servers : [];
     const status = Array.isArray(mcp.status) ? mcp.status : [];
+    const capabilities = state.capabilities && Array.isArray(state.capabilities.items) ? state.capabilities.items : [];
+    const nativeItems = capabilities.filter((item) => item && item.kind !== "mcp");
+    const mcpItems = capabilities.filter((item) => item && item.kind === "mcp");
     const registryJson = JSON.stringify(servers.map((server) => ({
       id: server.id,
       name: server.name,
@@ -254,15 +257,38 @@ function renderPanel(id, state, values) {
       ...(Array.isArray(server.args) && server.args.length ? { args: server.args } : {}),
       ...(server.allowActions ? { allowActions: true } : {}),
     })), null, 2);
+    const rows = (items, external) => items.length ? items.map((item) => {
+      const good = item.status === "connected" || item.status === "available";
+      const label = item.status === "connected"
+        ? (item.toolCount ? String(item.toolCount) + " tools" : "Connected")
+        : item.status === "available"
+          ? "Available"
+          : item.status === "configured"
+            ? "Configured"
+            : item.status === "disabled"
+              ? "Disabled"
+              : item.status === "unavailable"
+                ? "Unavailable"
+                : item.status || "Unknown";
+      const action = external && item.id !== "n8n"
+        ? '<button class="secondary capability-toggle" data-capability-id="' + escapeHtml(item.id) + '" data-enable="' + (item.enabled === false ? "true" : "false") + '">' + (item.enabled === false ? "Connect" : "Disconnect") + "</button>"
+        : "";
+      return '<div class="list-row"><span><strong>' + escapeHtml(item.name || item.id) + '</strong><small>' + escapeHtml(item.description || item.error || "") + '</small></span><span style="display:flex;gap:7px;align-items:center"><span class="badge ' + (good ? "ok" : "") + '">' + escapeHtml(label) + '</span>' + action + '</span></div>';
+    }).join("") : '<p class="muted">None discovered.</p>';
     return [
-      '<div class="page-title"><div><h2>MCP & Tools</h2><p>Connect n8n plus additional HTTP/SSE or local stdio MCP servers.</p></div></div>',
-      '<div class="card"><h3>External tool hub</h3><div class="info-row"><span>n8n MCP tools</span><span>' + escapeHtml(String((state.n8n && state.n8n.toolCount) || 0)) + '</span></div><div class="info-row"><span>Custom MCP servers</span><span>' + escapeHtml(String(servers.length)) + '</span></div></div>',
-      status.length
-        ? '<div class="card"><h3>Server status</h3>' + status.map((item) => '<div class="list-row"><span><strong>' + escapeHtml(item.name || item.id) + '</strong><small>' + escapeHtml(item.transport || (item.builtIn ? "built-in" : "")) + '</small></span><span class="badge ' + (item.ok ? "ok" : "") + '">' + escapeHtml(item.ok ? String(item.count || 0) + " tools" : item.error || "Offline") + '</span></div>').join("") + '</div>'
-        : '',
-      '<div class="card"><h3>MCP server registry</h3><p class="muted">Edit the JSON array below. HTTP/SSE uses <code>url</code>. Local desktop servers use <code>transport: "stdio"</code>, <code>command</code> and optional <code>args</code>. Add a temporary <code>token</code> field to save a bearer token into SecretStorage; it will not be shown again.</p>',
+      '<div class="page-title"><div><h2>Capabilities &amp; MCP</h2><p>See what CodeMe can use, connect saved MCP servers, and add new integrations. The AI reads this same capability registry.</p></div><button data-action="refresh-health">Refresh</button></div>',
+      '<div class="hero-card"><span class="eyebrow">Capability awareness</span><h3>Model-visible and user-controlled</h3><p>Skills and native helpers can be used directly. External services must be connected before CodeMe can use them; the agent may request a connection but cannot grant itself access.</p></div>',
+      '<div class="card"><h3>Native capabilities &amp; skills</h3>' + rows(nativeItems, false) + '</div>',
+      '<div class="card"><h3>MCP connections</h3>' + rows(mcpItems, true) + '</div>',
+      '<div class="card"><h3>Add MCP connection</h3><p class="muted">Add an HTTP MCP endpoint. CodeMe enables it and probes the connection. Tokens use the existing secure SecretStorage path.</p>',
+      '<label class="field"><span>Name</span><input id="mcp-add-name" placeholder="GitHub" /></label>',
+      '<label class="field"><span>MCP URL</span><input id="mcp-add-url" placeholder="https://example.com/mcp" /></label>',
+      '<label class="field"><span>Bearer token (optional)</span><input id="mcp-add-token" type="password" value="" placeholder="Stored securely" /></label>',
+      '<div class="actions"><button data-action="add-mcp">Connect &amp; test</button></div></div>',
+      status.length ? '<div class="card"><h3>Latest probe status</h3>' + status.map((item) => '<div class="list-row"><span><strong>' + escapeHtml(item.name || item.id) + '</strong><small>' + escapeHtml(item.transport || (item.builtIn ? "built-in" : "")) + '</small></span><span class="badge ' + (item.ok ? "ok" : "") + '">' + escapeHtml(item.ok ? String(item.count || 0) + " tools" : item.error || "Offline") + '</span></div>').join("") + '</div>' : '',
+      '<div class="card"><h3>Advanced MCP registry</h3><p class="muted">Use this for stdio servers or unusual configurations.</p>',
       '<textarea id="mcp-servers-json" class="json-editor" spellcheck="false">' + escapeHtml(registryJson) + '</textarea>',
-      '<div class="actions"><button data-action="save-mcp">Save MCP servers</button><button class="secondary" data-action="refresh-health">Probe all</button></div></div>',
+      '<div class="actions"><button data-action="save-mcp">Save advanced registry</button><button class="secondary" data-action="refresh-health">Probe all</button></div></div>',
     ].join("");
   }
   if (id === "research") return [
@@ -321,7 +347,7 @@ function renderSettings(state, nonce) {
     ["agents", "Agents & Teams", "AI"],
     ["paperclip", "Paperclip", "SERVICES"],
     ["n8n", "n8n & Automation", "SERVICES"],
-    ["mcp", "MCP & Tools", "SERVICES"],
+    ["mcp", "Capabilities & MCP", "SERVICES"],
     ["research", "Research & Web", "KNOWLEDGE"],
     ["memory", "Memory & Knowledge", "KNOWLEDGE"],
     ["skills", "Skills", "KNOWLEDGE"],
@@ -365,8 +391,9 @@ function renderSettings(state, nonce) {
     + 'document.getElementById("search").addEventListener("input",e=>{const q=String(e.target.value||"").toLowerCase().trim();nav.forEach(b=>b.style.display=!q||b.dataset.search.includes(q)?"":"none");});'
     + 'document.getElementById("scope").addEventListener("change",e=>{scope=e.target.value;saved.textContent="Refreshing…";vscode.postMessage({type:"settings-scope",scope});});'
     + 'document.querySelectorAll("[data-setting]").forEach(el=>el.addEventListener("change",()=>{const value=el.type==="checkbox"?el.checked:el.value;saved.textContent="Saving…";vscode.postMessage({type:"settings-save",scope,path:el.dataset.setting,value});}));'
-    + 'document.querySelectorAll("[data-action]").forEach(el=>el.addEventListener("click",()=>{const action=el.dataset.action;if(action==="refresh-health"){saved.textContent="Refreshing…";vscode.postMessage({type:"settings-refresh",scope});}if(action==="save-n8n"){const token=document.getElementById("n8n-token");saved.textContent="Saving…";vscode.postMessage({type:"settings-n8n-update",scope,patch:{mcpEnabled:document.getElementById("n8n-enabled").checked,mcpUrl:document.getElementById("n8n-mcp-url").value,autoEnhance:document.getElementById("n8n-auto-enhance").checked,enhanceWebhookUrl:document.getElementById("n8n-enhance-url").value,mcpToken:token&&token.value?token.value:undefined,allowImageUpload:document.getElementById("n8n-image-upload").checked}});}if(action==="save-mcp"){const field=document.getElementById("mcp-servers-json");try{const servers=JSON.parse(field&&field.value||"[]");if(!Array.isArray(servers))throw new Error("Registry must be a JSON array");saved.textContent="Saving…";vscode.postMessage({type:"settings-mcp-update",scope,servers});}catch(error){saved.textContent="! "+String(error&&error.message||error);}}if(action==="clear-project-brain"){saved.textContent="Clearing…";vscode.postMessage({type:"settings-memory-clear",scope});}if(action==="save-skill"){const name=document.getElementById("skill-name"),description=document.getElementById("skill-description"),instructions=document.getElementById("skill-instructions");saved.textContent="Saving…";vscode.postMessage({type:"settings-skill-save",scope,skill:{name:name&&name.value||"",description:description&&description.value||"",instructions:instructions&&instructions.value||""}});}}));'
+    + 'document.querySelectorAll("[data-action]").forEach(el=>el.addEventListener("click",()=>{const action=el.dataset.action;if(action==="refresh-health"){saved.textContent="Refreshing…";vscode.postMessage({type:"settings-refresh",scope});}if(action==="save-n8n"){const token=document.getElementById("n8n-token");saved.textContent="Saving…";vscode.postMessage({type:"settings-n8n-update",scope,patch:{mcpEnabled:document.getElementById("n8n-enabled").checked,mcpUrl:document.getElementById("n8n-mcp-url").value,autoEnhance:document.getElementById("n8n-auto-enhance").checked,enhanceWebhookUrl:document.getElementById("n8n-enhance-url").value,mcpToken:token&&token.value?token.value:undefined,allowImageUpload:document.getElementById("n8n-image-upload").checked}});}if(action==="save-mcp"){const field=document.getElementById("mcp-servers-json");try{const servers=JSON.parse(field&&field.value||"[]");if(!Array.isArray(servers))throw new Error("Registry must be a JSON array");saved.textContent="Saving…";vscode.postMessage({type:"settings-mcp-update",scope,servers});}catch(error){saved.textContent="! "+String(error&&error.message||error);}}if(action==="add-mcp"){const name=document.getElementById("mcp-add-name"),url=document.getElementById("mcp-add-url"),token=document.getElementById("mcp-add-token");saved.textContent="Connecting…";vscode.postMessage({type:"settings-mcp-add",scope,connection:{name:name&&name.value||"",url:url&&url.value||"",token:token&&token.value?token.value:undefined}});}if(action==="clear-project-brain"){saved.textContent="Clearing…";vscode.postMessage({type:"settings-memory-clear",scope});}if(action==="save-skill"){const name=document.getElementById("skill-name"),description=document.getElementById("skill-description"),instructions=document.getElementById("skill-instructions");saved.textContent="Saving…";vscode.postMessage({type:"settings-skill-save",scope,skill:{name:name&&name.value||"",description:description&&description.value||"",instructions:instructions&&instructions.value||""}});}}));'
     + 'document.querySelectorAll(".delete-skill").forEach(el=>el.addEventListener("click",()=>{saved.textContent="Deleting…";vscode.postMessage({type:"settings-skill-delete",scope,name:el.dataset.skill||""});}));'
+    + 'document.querySelectorAll(".capability-toggle").forEach(el=>el.addEventListener("click",()=>{saved.textContent=el.dataset.enable==="true"?"Connecting…":"Disconnecting…";vscode.postMessage({type:"settings-capability-toggle",scope,id:el.dataset.capabilityId||"",enabled:el.dataset.enable==="true"});}));'
     + 'window.addEventListener("message",event=>{const m=event.data||{};if(m.type==="settings-saved"){saved.textContent="● Saved";}if(m.type==="settings-error"){saved.textContent="! "+String(m.message||"Could not save");}if(m.type==="settings-reload"){location.reload();}});'
     + '</script></body></html>';
 }

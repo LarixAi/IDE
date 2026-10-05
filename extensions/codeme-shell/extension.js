@@ -173,6 +173,40 @@ function activate(context) {
       await refreshHub();
       return next;
     },
+    toggleCapability: async (id, enabled) => {
+      const wanted = String(id || "");
+      const servers = composer.externalTools.servers();
+      let matched = false;
+      const nextServers = servers.map((server) => {
+        if (String(server.id || "") !== wanted) return server;
+        matched = true;
+        return { ...server, enabled: enabled === true };
+      });
+      if (!matched) throw new Error("Unknown MCP capability " + wanted);
+      const next = await composer.externalTools.updateServers(nextServers);
+      await refreshHub();
+      return next;
+    },
+    addMcp: async (input) => {
+      const item = input && typeof input === "object" ? { ...input } : {};
+      const name = String(item.name || "").trim();
+      const url = String(item.url || "").trim();
+      if (!name) throw new Error("MCP connection name is required.");
+      if (!url) throw new Error("MCP URL is required.");
+      const next = await composer.externalTools.updateServers([
+        ...composer.externalTools.servers(),
+        {
+          name,
+          url,
+          token: item.token === undefined ? undefined : String(item.token || ""),
+          enabled: true,
+          transport: "http",
+          allowActions: false,
+        },
+      ]);
+      await refreshHub();
+      return next;
+    },
     updateN8n: async (patch) => {
       const next = patch && typeof patch === "object" ? { ...patch } : {};
       if (typeof next.allowImageUpload === "boolean") {

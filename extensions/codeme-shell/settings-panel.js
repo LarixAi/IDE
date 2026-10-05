@@ -119,6 +119,24 @@ class SettingsPanel {
         return;
       }
 
+      if (message.type === "settings-capability-toggle") {
+        if (typeof this.options.toggleCapability !== "function") {
+          throw new Error("Capability controls are not connected");
+        }
+        await this.options.toggleCapability(String(message.id || ""), message.enabled === true);
+        await this.render();
+        return;
+      }
+
+      if (message.type === "settings-mcp-add") {
+        if (typeof this.options.addMcp !== "function") {
+          throw new Error("MCP connection setup is not connected");
+        }
+        await this.options.addMcp(message.connection && typeof message.connection === "object" ? message.connection : {});
+        await this.render();
+        return;
+      }
+
       if (message.type === "settings-memory-clear") {
         if (typeof this.options.clearProjectBrain !== "function") {
           throw new Error("Project Brain management is not connected");
