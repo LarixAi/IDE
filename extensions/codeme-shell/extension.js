@@ -31,6 +31,7 @@ const { ResearchEngineerProvider } = require("./research-engineer");
 const { CodeMeCapabilityManager } = require("./capability-manager");
 const { ContextUnderstanding } = require("./context-understanding");
 const { BrowserHarnessProvider } = require("./browser-harness-provider");
+const { VoiceDictationService } = require("./voice-dictation");
 const { analyzeImages } = require("./vision-integration");
 
 let N8nCapabilityProvider;
@@ -1068,6 +1069,7 @@ class ComposerViewProvider {
     this.n8n = new N8nIntegration(context);
     this.terminalObserver = new TerminalObserver(vscode).start();
     this.researchEngineer = new ResearchEngineerProvider();
+    this.voiceDictation = new VoiceDictationService();
     this.browserHarness = new BrowserHarnessProvider({
       isEnabled: () => {
         const values = settingsStore && typeof settingsStore.effectiveValues === "function"
@@ -1258,6 +1260,32 @@ class ComposerViewProvider {
     if (!message || !this.view) return;
     if (message.type === "ready") {
       this.post(this.session.snapshot());
+      return;
+    }
+    if (message.type === "voice-status") {
+      this.view.webview.postMessage({
+        type: "voice-status",
+        status: this.voiceDictation.status(),
+      });
+      return;
+    }
+    if (message.type === "voice-transcribe") {
+      const voiceId = String(message.voiceId || "");
+      try {
+        const result = await this.voiceDictation.processBase64(String(message.audioBase64 || ""));
+        this.view.webview.postMessage({
+          type: "voice-result",
+          voiceId,
+          ...result,
+        });
+      } catch (error) {
+        this.view.webview.postMessage({
+          type: "voice-error",
+          voiceId,
+          code: error && error.code ? String(error.code) : "voice_failed",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       return;
     }
     if (message.type === "submit") {
