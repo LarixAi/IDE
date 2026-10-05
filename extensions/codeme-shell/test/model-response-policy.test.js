@@ -3,6 +3,7 @@
 const assert = require("assert");
 const {
   RESPONSE_POLICY,
+  ACTION_REQUIRED_POLICY,
   ResponsePolicyProvider,
   decodeAssistantEntities,
   hasRepeatedPhrase,
@@ -89,6 +90,72 @@ const {
   assert.strictEqual(toolAttempts, 1, "valid tool calls must not be discarded by prose repair");
   assert.strictEqual(toolReply.text, "Checking capabilities");
   assert.strictEqual(toolReply.toolCalls.length, 1);
+
+  let editAttempts = 0;
+  let editRetryMessages = [];
+  const editBase = {
+    name: "fixture",
+    async complete(input) {
+      editAttempts += 1;
+      editRetryMessages = input.messages || [];
+      if (editAttempts === 1) {
+        return { text: "Done — I updated the website.", toolCalls: [] };
+      }
+      return {
+        text: "",
+        toolCalls: [{ name: "file.read", args: { path: "public/index.html" } }],
+      };
+    },
+  };
+  const editReply = await new ResponsePolicyProvider(editBase).complete({
+    model: "fixture",
+    messages: [{ role: "user", content: "Can you fix the website UI? I don't like any of the pages." }],
+    tools: [
+      { name: "file.read", parameters: { type: "object", properties: { path: { type: "string" } } } },
+      { name: "file.patch", parameters: { type: "object", properties: {} } },
+      { name: "file.write", parameters: { type: "object", properties: {} } },
+    ],
+  });
+  assert.strictEqual(editAttempts, 2, "Code mode prose completion must be retried until the model takes an action");
+  assert.strictEqual(editReply.toolCalls.length, 1);
+  assert.strictEqual(editReply.toolCalls[0].name, "file.read");
+  assert.ok(
+    editRetryMessages.some((message) => (
+      message.role === "system"
+      && String(message.content || "").includes("ACTION REQUIRED")
+    )),
+  );
+  assert.ok(ACTION_REQUIRED_POLICY.includes("cannot finish with prose only"));
+
+  let verificationAttempts = 0;
+  const verificationBase = {
+    name: "fixture",
+    async complete() {
+      verificationAttempts += 1;
+      if (verificationAttempts === 1) {
+        return { text: "I couldn't complete that.", toolCalls: [] };
+      }
+      return {
+        text: "",
+        toolCalls: [{ name: "browser.check", args: {} }],
+      };
+    },
+  };
+  const verificationReply = await new ResponsePolicyProvider(verificationBase).complete({
+    model: "fixture",
+    messages: [
+      { role: "user", content: "Fix the website UI." },
+      { role: "assistant", content: "", toolCalls: [{ name: "file.write", args: { path: "public/index.html" } }] },
+      { role: "tool", name: "file.write", content: JSON.stringify({ ok: true, data: { changed: true } }) },
+      { role: "user", content: "VERIFICATION FAILED (repair round 1/2). Run browser.check after the edit." },
+    ],
+    tools: [
+      { name: "file.write", parameters: { type: "object", properties: {} } },
+      { name: "browser.check", parameters: { type: "object", properties: {} } },
+    ],
+  });
+  assert.strictEqual(verificationAttempts, 2, "verification repair prose must be retried as an action turn");
+  assert.strictEqual(verificationReply.toolCalls[0].name, "browser.check");
 
   console.log("ok model response policy, capability grounding, and garbled-text recovery");
 })().catch((error) => {

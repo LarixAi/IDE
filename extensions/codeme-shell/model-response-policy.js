@@ -26,6 +26,25 @@ const REPAIR_POLICY = [
   "Preserve the factual/tool-use requirements from the conversation and verify named CodeMe capabilities before claiming they are installed.",
 ].join(" ");
 
+const ACTION_REQUIRED_POLICY = [
+  "ACTION REQUIRED: this CodeMe turn cannot finish with prose only.",
+  "Use one of the supplied native tools now.",
+  "If you still need repository facts, inspect the specific file or directory needed.",
+  "If you already have enough context, apply the requested workspace change with the appropriate mutation tool.",
+  "If verification failed, use the failed verification item to choose the next repair or verification tool.",
+  "Do not claim that a file was changed, a process was started, or verification passed unless the corresponding tool result exists.",
+].join(" ");
+
+const MUTATION_TOOLS = new Set([
+  "file.write",
+  "file.patch",
+  "document.create",
+  "document.edit",
+  "dir.create",
+]);
+
+const EDIT_INTENT = /\b(edit|change|update|write|create|add|remove|delete|fix|repair|implement|build|make|rename|refactor|restyle|redesign)\b/i;
+
 function safeCodePoint(value) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 0x10ffff) return "";
@@ -88,6 +107,70 @@ function normalizeAssistantText(value) {
     .trim();
 }
 
+
+function latestUserText(messages) {
+  const source = Array.isArray(messages) ? messages : [];
+  for (let index = source.length - 1; index >= 0; index -= 1) {
+    const message = source[index];
+    if (message && message.role === "user") return String(message.content || "");
+  }
+  return "";
+}
+
+function originalEditRequest(messages) {
+  const source = Array.isArray(messages) ? messages : [];
+  for (const message of source) {
+    if (!message || message.role !== "user") continue;
+    const content = String(message.content || "");
+    if (/^VERIFICATION FAILED/i.test(content.trim())) continue;
+    if (EDIT_INTENT.test(content)) return content;
+  }
+  return "";
+}
+
+function successfulMutationMessage(message) {
+  if (!message || message.role !== "tool" || !MUTATION_TOOLS.has(String(message.name || ""))) return false;
+  try {
+    const result = JSON.parse(String(message.content || "{}"));
+    if (!result || result.ok !== true) return false;
+    if (
+      ["file.write", "file.patch", "document.create", "document.edit"].includes(String(message.name || ""))
+      && result.data
+      && result.data.changed === false
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasSuccessfulMutation(messages) {
+  return (Array.isArray(messages) ? messages : []).some(successfulMutationMessage);
+}
+
+function offeredNames(input) {
+  return new Set((Array.isArray(input && input.tools) ? input.tools : []).map((tool) => String(tool && tool.name || "")));
+}
+
+function needsActionRetry(input, reply) {
+  const calls = Array.isArray(reply && reply.toolCalls) ? reply.toolCalls : [];
+  if (calls.length) return false;
+
+  const messages = Array.isArray(input && input.messages) ? input.messages : [];
+  const offered = offeredNames(input);
+  if (!offered.size) return false;
+
+  const latest = latestUserText(messages);
+  if (/^VERIFICATION FAILED/i.test(latest.trim())) return true;
+
+  const mutationAvailable = [...MUTATION_TOOLS].some((name) => offered.has(name));
+  if (!mutationAvailable) return false;
+  if (hasSuccessfulMutation(messages)) return false;
+  return Boolean(originalEditRequest(messages));
+}
+
 class ResponsePolicyProvider {
   constructor(provider) {
     this.provider = provider;
@@ -105,6 +188,19 @@ class ResponsePolicyProvider {
     messages.push({ role: "system", content: RESPONSE_POLICY });
 
     let reply = await this.provider.complete({ ...input, messages });
+
+    if (needsActionRetry({ ...input, messages }, reply)) {
+      const retryMessages = messages.concat([{ role: "system", content: ACTION_REQUIRED_POLICY }]);
+      try {
+        const retried = await this.provider.complete({ ...input, messages: retryMessages });
+        if (retried && (String(retried.text || "").trim() || (Array.isArray(retried.toolCalls) && retried.toolCalls.length))) {
+          reply = retried;
+        }
+      } catch {
+        // Keep the first successful model response; deterministic verification remains authoritative.
+      }
+    }
+
     const toolCalls = Array.isArray(reply && reply.toolCalls) ? reply.toolCalls : [];
     const firstText = String(reply && reply.text || "");
 
@@ -135,10 +231,13 @@ function wrapResponsePolicy(provider) {
 module.exports = {
   RESPONSE_POLICY,
   REPAIR_POLICY,
+  ACTION_REQUIRED_POLICY,
   ResponsePolicyProvider,
   decodeAssistantEntities,
   hasRepeatedPhrase,
   looksCorruptedAssistantText,
   normalizeAssistantText,
+  needsActionRetry,
+  hasSuccessfulMutation,
   wrapResponsePolicy,
 };
