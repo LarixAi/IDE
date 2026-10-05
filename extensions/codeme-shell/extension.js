@@ -18,6 +18,7 @@ const { wrapResponsePolicy } = require("./model-response-policy");
 const { PaperclipBridge } = require("./paperclip-bridge");
 const { DebugToolProvider } = require("./debug-tool-provider");
 const { VerificationToolProvider } = require("./verification-tool-provider");
+const { CodeMeControlledToolProvider } = require("./codeme-tool-provider");
 const { MultitaskController } = require("./multitask-controller");
 const { SettingsPanel } = require("./settings-panel");
 const { V19NativeWorkbench } = require("./v19-native-workbench");
@@ -1064,7 +1065,7 @@ class ComposerViewProvider {
           return new ToolRegistry(new VerificationToolProvider(host));
         }
         return new ToolRegistry(
-          mode === "controlled" ? new ControlledToolProvider(host) : new ReadOnlyToolProvider(host),
+          mode === "controlled" ? new CodeMeControlledToolProvider(host) : new ReadOnlyToolProvider(host),
         );
       },
       capabilities: this.capabilities,
