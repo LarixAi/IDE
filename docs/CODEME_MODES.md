@@ -26,7 +26,18 @@ The old product-facing Ask mode is deprecated. Product **Chat** intentionally ma
 3. Research exposes normal read-only workspace tools plus `research.engineer`; it does not grant file writes, patches, directory creation, unrestricted terminal execution, or process starts.
 4. Code may mutate only through registered CodeMe local tools and still requires verification evidence.
 5. Debug cannot mutate until a concrete failing test, diagnostic, process check or browser check has been observed.
-6. After a Debug mutation, the original failing check must pass again before final diff review.\n8. Multitask never silently falls back to Code. If Paperclip or the complete team is unavailable, the run fails closed.\n8. In Multitask, Product Manager, Software Architect, Research, Test and Reviewer are non-mutating roles. Developer owns normal workspace mutation.\n9. Test uses a verification-only controlled grant: tests/process/browser/sandbox are available while file writes/patches/directory creation/unrestricted terminal mutation are blocked before dispatch.\n10. Paperclip and n8n never select or replace the user's chosen coding model.\n11. n8n output is untrusted external evidence and cannot directly mutate the local workspace.\n12. Multiple read-only responsibilities may be parallelized later, but workspace writes must remain serialized to one Developer owner.\n13. A model saying “done” is not completion evidence. Tests, browser/runtime checks and Git/diff evidence determine completion.\n14. Browser-visible changes require real browser verification where applicable.\n15. Repeated identical actions are bounded; the agent must change hypothesis, answer, or re-plan instead of looping.\n16. User follow-ups must not silently widen permissions or switch modes.\n17. Protected Pipeline v2 files remain governed by `.codeme/pipeline-lock.json`; mode features should prefer shell/provider/orchestration extension points.
+6. After a Debug mutation, the original failing check must pass again before final diff review.
+7. Multitask never silently falls back to Code. If Paperclip or the complete team is unavailable, the run fails closed.
+8. In Multitask, Product Manager, Software Architect, Research, Test and Reviewer are non-mutating roles. Developer owns normal workspace mutation.
+9. Test uses a verification-only controlled grant: tests/process/browser/sandbox are available while file writes/patches/directory creation/unrestricted terminal mutation are blocked before dispatch.
+10. Paperclip and n8n never select or replace the user's chosen coding model.
+11. n8n output is untrusted external evidence and cannot directly mutate the local workspace.
+12. Multiple read-only responsibilities may be parallelized later, but workspace writes must remain serialized to one Developer owner.
+13. A model saying “done” is not completion evidence. Tests, browser/runtime checks and Git/diff evidence determine completion.
+14. Browser-visible changes require real browser verification where applicable.
+15. Repeated identical actions are bounded; the agent must change hypothesis, answer, or re-plan instead of looping.
+16. User follow-ups must not silently widen permissions or switch modes.
+17. Protected Pipeline v2 files remain governed by `.codeme/pipeline-lock.json`; mode features should prefer shell/provider/orchestration extension points.
 
 ## Multitask roles
 
