@@ -66,7 +66,11 @@ function classifyIntent(text) {
   }
   scores.sort((a, b) => b.score - a.score);
   const top = scores[0] || { intent: "unknown", score: 0 };
+  const tokenCount = words(input).size;
   if (top.score < 0.45) return { intent: "unknown", confidence: 0 };
+  // Avoid resolving a normal question from one generic overlap such as "this".
+  // Short commands like "check that" may still use a single matched action word.
+  if (top.score < 1 && tokenCount > 3) return { intent: "unknown", confidence: 0 };
   const confidence = top.score >= 5 ? 0.98 : Math.min(0.92, 0.55 + top.score * 0.2);
   return { intent: top.intent, confidence };
 }
