@@ -20,6 +20,7 @@ function normalizeComposerMode(value) {
   // Keep "ask" internally so Pipeline v2 remains read-only and unchanged.
   if (mode === "chat" || mode === "chat_only" || mode === "ask") return "ask";
   if (mode === "code" || mode === "controlled") return "code";
+  if (mode === "research") return "research";
   if (mode === "debug") return "debug";
   if (mode === "test") return "test";
   if (mode === "multitask") return "multitask";
@@ -38,6 +39,7 @@ function agentModeFor(composerMode) {
 function taskClassFor(composerMode) {
   const mode = normalizeComposerMode(composerMode);
   if (mode === "plan") return "plan";
+  if (mode === "research") return "research";
   if (mode === "debug") return "bug-fix";
   if (mode === "test") return "bug-fix";
   return "";
@@ -51,6 +53,7 @@ function looksLikeWorkspaceEdit(goal) {
 function composerModeLabel(composerMode) {
   const mode = normalizeComposerMode(composerMode);
   if (mode === "ask") return "Chat";
+  if (mode === "research") return "Research";
   if (mode === "plan") return "Plan";
   if (mode === "code") return "Code";
   if (mode === "debug") return "Debug";

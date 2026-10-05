@@ -14,6 +14,7 @@ assert.match(html, /CodeMe Current UI/);
 assert.match(html, /Cursor-reference Composer V23/);
 assert.match(html, /header \.workspace-actions \{\s*display: none !important;/);
 assert.match(html, /placeholder="Plan, Build, \/ for skills, @ for context"/);
+assert.match(html, /<option value="research">Research<\/option>/);
 assert.doesNotMatch(html, /placeholder="Ask CodeMe anything/);
 
 const manifest = JSON.parse(fs.readFileSync(path.join(shellRoot, "package.json"), "utf8"));
