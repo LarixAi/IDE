@@ -3,6 +3,7 @@
 const { ControlledToolProvider } = require("../../packages/agent-runtime/tool-registry");
 
 const MUTATION_TOOLS = new Set(["file.write", "file.patch", "dir.create"]);
+const LEGACY_BROWSER_TOOLS = new Set(["browser.check", "browser.interact"]);
 const FAILURE_CHECK_TOOLS = new Set([
   "tests.run",
   "sandbox.run",
@@ -60,15 +61,33 @@ function isFailureEvidence(name, result) {
 }
 
 class DebugToolProvider extends ControlledToolProvider {
-  constructor(host) {
+  constructor(host, options = {}) {
     super(host);
+    this.legacyBrowserEnabled = options.legacyBrowserEnabled !== false;
     this.failureCheck = null;
     this.failureObserved = false;
     this.recheckRequired = false;
     this.mutations = 0;
   }
 
+  definitions() {
+    return super.definitions().filter(
+      (tool) => this.legacyBrowserEnabled || !LEGACY_BROWSER_TOOLS.has(tool && tool.name),
+    );
+  }
+
   async call(name, args) {
+    if (!this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)) {
+      return {
+        ok: false,
+        tool: name,
+        error: {
+          code: "legacy_browser_disabled",
+          message: "The legacy CodeMe browser runner is disabled while Browser Harness is under migration testing.",
+        },
+      };
+    }
+
     if (MUTATION_TOOLS.has(name) && !this.failureObserved) {
       return {
         ok: false,
