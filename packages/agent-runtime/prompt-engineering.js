@@ -14,6 +14,7 @@ const CODE_PROMPT_PROTOCOL = [
   "- Distinguish observations from assumptions. Repository contents, tool results, diagnostics, process logs, tests, and browser results are evidence; guesses are not.",
   "- Choose the smallest next action that advances an unmet acceptance criterion or resolves the current blocker.",
   "- After a tool failure, classify the failure from the exact observation, inspect only the context needed to repair it, then retry the blocked step. Do not spend turns paraphrasing the same error.",
+  "- When the user only asks to run or open an existing website, start/reuse the CodeMe-owned process and then call browser.check with allowPresentationWarnings=true. In this run-only case, missing images, fonts, or media may be reported as warnings while missing scripts/styles, runtime errors, and failed requested interactions remain failures. For build/edit verification, keep browser checks strict.",
   "- Do not treat created files, a running server, HTTP 200, or a clean console as proof that requested product features exist or work.",
   "- Before finishing, reconcile the original objective and every critical acceptance criterion against actual evidence. If a critical criterion is unimplemented or unverified, continue working or report the run as blocked/incomplete.",
   "- Keep user-facing narration concise. Tool execution and verification evidence belong in tool/progress events rather than long speculative prose.",
