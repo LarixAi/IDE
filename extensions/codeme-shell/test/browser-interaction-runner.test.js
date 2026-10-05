@@ -47,7 +47,7 @@ async function main() {
   }, networkEvidence);
   assert.deepStrictEqual(networkEvidence.failedRequests, ["net::ERR_CONNECTION_REFUSED"]);
 
-  const presentationEvidence = { pageErrors: [], failedRequests: [], httpErrors: [], networkWarnings: [] };
+  const presentationEvidence = { pageErrors: [], failedRequests: [], httpErrors: [], networkWarnings: [], allowPresentationWarnings: true };
   collectBrowserEvidence({
     method: "Network.responseReceived",
     params: {
@@ -57,6 +57,15 @@ async function main() {
   }, presentationEvidence);
   assert.deepStrictEqual(presentationEvidence.httpErrors, []);
   assert.deepStrictEqual(presentationEvidence.networkWarnings, ["404 http://127.0.0.1:4173/assets/hero-bg.jpg"]);
+  const strictPresentationEvidence = { pageErrors: [], failedRequests: [], httpErrors: [], networkWarnings: [] };
+  collectBrowserEvidence({
+    method: "Network.responseReceived",
+    params: {
+      type: "Image",
+      response: { status: 404, url: "http://127.0.0.1:4173/assets/hero-bg.jpg" },
+    },
+  }, strictPresentationEvidence);
+  assert.deepStrictEqual(strictPresentationEvidence.httpErrors, ["404 http://127.0.0.1:4173/assets/hero-bg.jpg"], "build/edit verification should remain strict about missing images");
   collectBrowserEvidence({
     method: "Network.responseReceived",
     params: {
@@ -125,7 +134,7 @@ async function main() {
         text: "Failed to load resource: the server responded with a status of 404",
       },
     },
-  }, errors);
+  }, errors, { allowPresentationWarnings: true });
   assert.deepStrictEqual(errors, ["broken click"], "missing presentation assets should stay warnings, not browser runtime errors");
 
   const executable = findBrowserExecutable();
