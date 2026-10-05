@@ -28,6 +28,7 @@ const { loadProjectBrain, brainPath } = require("../../packages/agent-runtime/pr
 const { loadSkills } = require("../../packages/agent-runtime/skills");
 const { TerminalObserver } = require("./terminal-observer");
 const { ResearchEngineerProvider } = require("./research-engineer");
+const { ResearchModeToolProvider } = require("./research-mode-tool-provider");
 const { CodeMeCapabilityManager } = require("./capability-manager");
 const { ContextUnderstanding } = require("./context-understanding");
 const { BrowserHarnessProvider } = require("./browser-harness-provider");
@@ -1085,6 +1086,17 @@ class ComposerViewProvider {
       this.researchEngineer,
       this.browserHarness,
     ]);
+    this.pipelineExternalTools = {
+      listTools: async (signal) => {
+        const listed = await this.externalTools.listTools(signal);
+        if (!Array.isArray(listed)) return [];
+        if (this.session && this.session.composerMode === "research") {
+          return listed.filter((tool) => tool && tool.name !== "research.engineer");
+        }
+        return listed;
+      },
+      call: (name, args, signal) => this.externalTools.call(name, args, signal),
+    };
     this.contextUnderstanding = new ContextUnderstanding({
       getRoot: () => workspaceRoot(),
       storageDir: path.join(context.globalStorageUri.fsPath, "context-understanding"),
@@ -1168,6 +1180,9 @@ class ComposerViewProvider {
         if (mode === "controlled" && composerMode === "test") {
           return new ToolRegistry(new VerificationToolProvider(host, browserOptions));
         }
+        if (mode === "read_only" && composerMode === "research") {
+          return new ToolRegistry(new ResearchModeToolProvider(host, this.researchEngineer));
+        }
         return new ToolRegistry(
           mode === "controlled"
             ? new CodeMeControlledToolProvider(host, browserOptions)
@@ -1175,7 +1190,7 @@ class ComposerViewProvider {
         );
       },
       capabilities: this.capabilities,
-      externalTools: this.externalTools,
+      externalTools: this.pipelineExternalTools,
       n8n: this.n8n,
       analyzeImages,
       settingsProvider: () => settingsStore ? settingsStore.effectiveValues() : {},
