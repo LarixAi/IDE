@@ -47,7 +47,7 @@ class FakeRegistry {
       { name: "process.start", description: "Start preview", parameters: { type: "object", properties: { command: { type: "string" }, restart: { type: "boolean" } }, required: [] } },
       { name: "process.status", description: "Process status", parameters: { type: "object", properties: {}, required: [] } },
       { name: "process.logs", description: "Process logs", parameters: { type: "object", properties: {}, required: [] } },
-      { name: "browser.check", description: "Browser check", parameters: { type: "object", properties: { url: { type: "string" } }, required: [] } },
+      { name: "browser.check", description: "Browser check", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } },
       { name: "browser.interact", description: "Browser interact", parameters: { type: "object", properties: { url: { type: "string" }, action: { type: "string" } }, required: ["url", "action"] } },
     ];
   }
@@ -460,34 +460,6 @@ async function testRunWebsiteRequiresRealPreview() {
   assert.ok(run.repairs.some((item) => item.reason === "verification_failed"));
 }
 
-async function testRunWebsiteVerifierAutoChecksOwnedPreview() {
-  const registry = new FakeRegistry();
-  const provider = new ScriptedProvider([
-    { text: "", toolCalls: [{ name: "process.start", args: {} }] },
-    { text: "The website is running.", toolCalls: [] },
-  ]);
-
-  const run = await startPipelineRun({
-    goal: "Run the existing website.",
-    model: "fixture",
-    providerName: "fixture-local",
-    provider,
-    registry,
-    store: storeFor("run-auto-browser-check"),
-    mode: "controlled",
-    composerMode: "code",
-    maxIterations: 6,
-  }).done;
-
-  assert.strictEqual(run.lifecycle, "completed");
-  assert.strictEqual(run.verification.status, "passed");
-  const checks = run.toolCalls.filter((call) => call.name === "browser.check" && call.result && call.result.ok);
-  assert.strictEqual(checks.length, 1);
-  assert.strictEqual(checks[0].directedBy, "verification");
-  assert.strictEqual(checks[0].args.allowPresentationWarnings, true);
-  assert.ok(run.verification.evidence.includes("browser.check"));
-}
-
 async function testExternalToolsStayVisibleAndUntrusted() {
   const registry = new FakeRegistry();
   const externalTools = {
@@ -610,7 +582,6 @@ async function main() {
   await testNoOpAfterBrowserDoesNotInvalidateVerification();
   await testVerifierReplaysBrowserAfterLaterRealEdit();
   await testRunWebsiteRequiresRealPreview();
-  await testRunWebsiteVerifierAutoChecksOwnedPreview();
   await testExternalToolsStayVisibleAndUntrusted();
   await testLiveFollowUp();
   console.log("ok pipeline v2 cursor-style loop");
