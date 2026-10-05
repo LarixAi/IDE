@@ -106,7 +106,7 @@ class BrowserHarnessProvider {
           "Experimental Browser Harness candidate for autonomous browser diagnosis and interaction. "
           + "Use it during the migration test phase to inspect and control the real browser, reproduce UI failures, "
           + "collect browser evidence, and then repair code with CodeMe's normal file/terminal tools. "
-          + "The existing browser.check remains the authoritative completion gate until the replacement test plan passes.",
+          + "During harness-only migration testing, use this as the browser control path while the legacy browser tools are disabled by CodeMe settings.",
         parameters: {
           type: "object",
           properties: {
@@ -222,7 +222,7 @@ class BrowserHarnessProvider {
       connected: enabled && this.connected,
       status,
       detail: !enabled
-        ? "Browser Harness candidate is disabled. The current CodeMe browser runner remains active."
+        ? "Browser Harness is disabled."
         : this.connected
           ? "Browser Harness MCP is connected and available for migration testing."
           : this.lastError
@@ -232,7 +232,7 @@ class BrowserHarnessProvider {
       packageSpec: this.packageSpec,
       actions: this.availableActions.slice(),
       allowRecording: this.allowRecording,
-      activeEngine: "current",
+      activeEngine: enabled ? "browser-harness" : "disabled",
       replacementReady: false,
     };
   }
