@@ -11,6 +11,16 @@ const MODE_CONTRACTS = Object.freeze({
     orchestrated: false,
     description: "Workspace-aware conversation and explanation without edits.",
   }),
+  research: Object.freeze({
+    key: "research",
+    label: "Research",
+    internalComposerMode: "research",
+    agentMode: "read_only",
+    taskClass: "research",
+    mutation: "blocked",
+    orchestrated: false,
+    description: "Research current or external technical questions with workspace reads and Research Engineer, without editing.",
+  }),
   plan: Object.freeze({
     key: "plan",
     label: "Plan",
@@ -53,7 +63,7 @@ const MODE_CONTRACTS = Object.freeze({
   }),
 });
 
-const MODE_ORDER = Object.freeze(["chat", "plan", "code", "debug", "multitask"]);
+const MODE_ORDER = Object.freeze(["chat", "research", "plan", "code", "debug", "multitask"]);
 
 function visibleMode(value) {
   const text = String(value || "").trim().toLowerCase();
