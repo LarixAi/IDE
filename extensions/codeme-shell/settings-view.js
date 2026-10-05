@@ -304,18 +304,21 @@ function renderPanel(id, state, values) {
   if (id === "browser") {
     const harness = state.browserHarness || {};
     const harnessStatus = String(harness.status || "disabled");
+    const harnessEnabled = Boolean(values.browser && values.browser.browserHarnessEnabled === true);
+    const legacyEnabled = Boolean(values.browser && values.browser.legacyBrowserEnabled === true);
     return [
-      '<div class="page-title"><div><h2>Browser &amp; Preview</h2><p>Test Browser Harness safely before replacing the current browser verifier.</p></div></div>',
-      '<div class="hero-card"><span class="eyebrow">Active browser engine</span><h3>Current CodeMe CDP runner</h3><p>The existing browser.check/browser.interact path remains the completion authority until the replacement gates pass.</p></div>',
-      '<div class="card"><h3>Browser Harness candidate</h3>',
-      toggle("browser.browserHarnessEnabled", "Enable Browser Harness candidate", values.browser && values.browser.browserHarnessEnabled === true, "Expose the MCP-backed candidate tool alongside the current browser runner for controlled migration testing."),
-      '<div class="info-row"><span>Candidate status</span><span class="badge ' + (harnessStatus === "connected" ? "ok" : "") + '">' + escapeHtml(harnessStatus) + '</span></div>',
+      '<div class="page-title"><div><h2>Browser &amp; Preview</h2><p>Run Browser Harness by itself while keeping the previous browser implementation available only for rollback.</p></div></div>',
+      '<div class="hero-card"><span class="eyebrow">Active browser test engine</span><h3>' + escapeHtml(harnessEnabled && !legacyEnabled ? "Browser Harness" : legacyEnabled ? "Legacy CodeMe browser enabled" : "No browser engine enabled") + '</h3><p>' + escapeHtml(harnessEnabled && !legacyEnabled ? "Harness-only test mode is active. browser.check and browser.interact are hidden from the model." : "Adjust the switches below to choose the migration test path.") + '</p></div>',
+      '<div class="card"><h3>Browser Harness migration test</h3>',
+      toggle("browser.browserHarnessEnabled", "Enable Browser Harness", harnessEnabled, "Expose the MCP-backed Browser Harness tool to the CodeMe agent."),
+      toggle("browser.legacyBrowserEnabled", "Enable legacy CodeMe browser fallback", legacyEnabled, "Leave this off during harness-only tests. Turn it on only if you need to roll back while diagnosing the migration."),
+      '<div class="info-row"><span>Harness status</span><span class="badge ' + (harnessStatus === "connected" ? "ok" : "") + '">' + escapeHtml(harnessStatus) + '</span></div>',
       '<div class="info-row"><span>MCP package</span><code>' + escapeHtml(harness.packageSpec || "browser-harness[mcp]==0.1.13") + '</code></div>',
-      '<div class="info-row"><span>Recording</span><span>' + escapeHtml(harness.allowRecording ? "Allowed" : "Disabled") + '</span></div>',
+      '<div class="info-row"><span>Legacy browser tools</span><span class="badge ' + (!legacyEnabled ? "ok" : "") + '">' + escapeHtml(legacyEnabled ? "Enabled for rollback" : "Disabled") + '</span></div>',
       '<div class="info-row"><span>Replacement ready</span><span class="badge">' + escapeHtml(harness.replacementReady ? "Yes" : "No — testing") + '</span></div>',
-      '<p class="muted">' + escapeHtml(harness.detail || "Enable the candidate to probe Browser Harness through MCP.") + '</p>',
+      '<p class="muted">' + escapeHtml(harness.detail || "Browser Harness will be probed through MCP when the agent needs browser control.") + '</p>',
       '</div>',
-      '<div class="notice">Cutover policy: test first, then route the existing browser.check/browser.interact contracts to Browser Harness, run CI and recovery tests, and only then remove the old browser runner.</div>',
+      '<div class="notice">The old CDP implementation has not been deleted. While the fallback switch is off, its browser.check/browser.interact tools are not offered to controlled CodeMe runs. After Browser Harness passes the migration gates, the old implementation can be removed.</div>',
     ].join("");
   }
   if (id === "git") return '<div class="page-title"><div><h2>Git & GitHub</h2><p>Source-control behaviour and remote actions.</p></div></div>' + planned("Git permissions", "Configure diff, commit, push, force-push and GitHub write approvals separately.");
