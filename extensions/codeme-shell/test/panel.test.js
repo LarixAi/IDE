@@ -40,8 +40,10 @@ assert.ok(html.includes("ResourceURLs"));
 assert.ok(!html.includes("qwen3.5:9b"));
 assert.ok(!html.includes("File edits stay off"));
 assert.ok(!html.includes("workbench.action.chat.open"));
-assert.ok(html.includes('renderThread(state.thread || [], !running && Boolean(state.runId));'));
-assert.ok(!html.includes('renderThread(state.thread || [], !running && Boolean(state.runId) && streamItems.length > 0);'));
+assert.ok(html.includes("failedVerificationRun"), "failed verification should suppress malformed deferred final prose");
+assert.ok(html.includes("verificationFailureText"), "failed verification should render deterministic failure text");
+assert.ok(html.includes("renderThread("));
+assert.ok(html.includes("failedVerificationRun,"));
 
 const welcome = renderWelcome({
   detail: "A local model is selected.",
