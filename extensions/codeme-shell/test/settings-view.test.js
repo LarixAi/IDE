@@ -33,6 +33,15 @@ const state = {
       { name: "debug-api", description: "Debug the API", source: "workspace", path: ".codeme/skills/debug-api/SKILL.md" },
     ],
   },
+  capabilities: {
+    items: [
+      { id: "skill:fix-terminal-error", name: "/fix-terminal-error", kind: "skill", status: "available", connected: true, description: "Repair terminal failures" },
+      { id: "research-engineer", name: "Research Engineer", kind: "native", status: "connected", connected: true, description: "Native research" },
+      { id: "github", name: "GitHub", kind: "mcp", status: "connected", connected: true, enabled: true, toolCount: 2, description: "MCP server via http" },
+      { id: "supabase", name: "Supabase", kind: "mcp", status: "disabled", connected: false, enabled: false, description: "MCP server via http" },
+    ],
+    counts: { total: 4 },
+  },
   mcp: {
     servers: [{ id: "github", name: "GitHub", enabled: true, transport: "http", url: "https://example.test/mcp" }],
     status: [{ id: "github", name: "GitHub", ok: true, count: 2, transport: "http" }],
@@ -70,7 +79,7 @@ assert.ok(html.includes("Models &amp; Providers"));
 assert.ok(html.includes("Agents &amp; Teams"));
 assert.ok(html.includes("Paperclip"));
 assert.ok(html.includes("n8n &amp; Automation"));
-assert.ok(html.includes("MCP &amp; Tools"));
+assert.ok(html.includes("Capabilities &amp; MCP"));
 assert.ok(html.includes("Research &amp; Web"));
 assert.ok(html.includes("Memory &amp; Knowledge"));
 assert.ok(html.includes("Skills"));
@@ -78,7 +87,7 @@ assert.ok(html.includes("Project Brain"));
 assert.ok(html.includes(".codeme/project-brain.json"));
 assert.ok(html.includes("Dealership website"));
 assert.ok(html.includes("/debug-api"));
-assert.ok(html.includes("MCP server registry"));
+assert.ok(html.includes("Add MCP connection"));\nassert.ok(html.includes("Connect &amp; test"));\nassert.ok(html.includes("Advanced MCP registry"));\nassert.ok(html.includes("Supabase"));\nassert.ok(html.includes("Disconnect"));\nassert.ok(html.includes(">Connect<"));
 assert.ok(html.includes("GitHub"));
 assert.ok(html.includes("Workspace"));
 assert.ok(html.includes("Terminal"));
