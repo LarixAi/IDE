@@ -8,6 +8,23 @@ const CDP_WAIT_MS = 10000;
 const ACTION_WAIT_MS = 250;
 const HOLD_VISIBLE_MS = 2500;
 
+const NON_BLOCKING_RESOURCE_TYPES = new Set(["Image", "Font", "Media"]);
+
+function isNonBlockingPresentationResource(url, resourceType) {
+  const type = String(resourceType || "");
+  if (NON_BLOCKING_RESOURCE_TYPES.has(type)) return true;
+  let pathname = String(url || "");
+  try { pathname = new URL(pathname).pathname; } catch {}
+  return /\.(?:png|jpe?g|gif|webp|svg|ico|woff2?|ttf|otf|mp4|webm|mp3|wav)$/i.test(pathname.split("?")[0].split("#")[0]);
+}
+
+function pushNetworkWarning(evidence, value) {
+  if (!evidence) return;
+  if (!Array.isArray(evidence.networkWarnings)) evidence.networkWarnings = [];
+  const text = String(value || "").trim();
+  if (text && !evidence.networkWarnings.includes(text)) evidence.networkWarnings.push(text.slice(0, 1500));
+}
+
 function browserCandidates() {
   const home = os.homedir();
   if (process.platform === "darwin") {
@@ -164,9 +181,10 @@ function createBrowserInteractionRunner(options = {}) {
         const pageErrors = [];
         const failedRequests = [];
         const httpErrors = [];
+        const networkWarnings = [];
         client.onEvent((message) => {
           collectBrowserError(message, consoleErrors);
-          collectBrowserEvidence(message, { pageErrors, failedRequests, httpErrors });
+          collectBrowserEvidence(message, { pageErrors, failedRequests, httpErrors, networkWarnings });
         });
 
         await client.send("Runtime.enable");
@@ -195,6 +213,7 @@ function createBrowserInteractionRunner(options = {}) {
               pageErrors,
               failedRequests,
               httpErrors,
+              networkWarnings,
             };
           }
         }
@@ -212,6 +231,7 @@ function createBrowserInteractionRunner(options = {}) {
             pageErrors,
             failedRequests,
             httpErrors,
+            networkWarnings,
           };
         }
 
@@ -234,6 +254,7 @@ function createBrowserInteractionRunner(options = {}) {
           pageErrors,
           failedRequests,
           httpErrors,
+          networkWarnings,
         };
       } catch (error) {
         return {
@@ -548,15 +569,24 @@ function collectBrowserEvidence(message, evidence) {
     // superseded by the explicit Page.navigate call. The final HTTP response,
     // runtime errors, and interaction assertions are checked separately.
     if (text === "net::ERR_ABORTED" && !params.blockedReason) return;
+    if (isNonBlockingPresentationResource("", params.type)) {
+      pushNetworkWarning(evidence, `${String(params.type || "resource")} request: ${text}`);
+      return;
+    }
     if (text && !evidence.failedRequests.includes(text)) evidence.failedRequests.push(text.slice(0, 1000));
     return;
   }
   if (message.method === "Network.responseReceived") {
-    const response = message.params && message.params.response;
+    const params = message.params || {};
+    const response = params.response;
     if (!response || Number(response.status) < 400) return;
     const url = String(response.url || "");
     if (/favicon\.ico(?:\?|$)/i.test(url)) return;
     const item = `${Number(response.status)} ${url}`.trim();
+    if (isNonBlockingPresentationResource(url, params.type)) {
+      pushNetworkWarning(evidence, item);
+      return;
+    }
     if (!evidence.httpErrors.includes(item)) evidence.httpErrors.push(item.slice(0, 1500));
   }
 }
@@ -575,6 +605,7 @@ function collectBrowserError(message, errors) {
     const entry = message.params && message.params.entry;
     if (!entry || entry.level !== "error") return;
     if (/favicon\.ico(?:\?|$)/i.test(String(entry.url || ""))) return;
+    if (isNonBlockingPresentationResource(entry.url || "", "")) return;
     text = entry.text || "";
   }
   text = String(text || "").trim();
