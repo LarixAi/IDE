@@ -62,6 +62,40 @@ for stale in "$ext_dir"/codeme.codeme-shell-*; do
 done
 ln -sfn "$root/extensions/codeme-shell" "$extension_link"
 
+# Keep Code - OSS' extension registry in sync with the symlink above.
+# A version bump can otherwise leave extensions.json pointing at an old folder
+# while .obsolete marks the new CodeMe version as disabled, causing stock Chat
+# to appear instead of the CodeMe Agent view.
+"$node_bin/node" - "$ext_dir" "$extension_link" "$extension_version" <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const [extDir, extensionLink, version] = process.argv.slice(2);
+const relativeLocation = path.basename(extensionLink);
+const id = "codeme.codeme-shell";
+
+const registry = [{
+  identifier: { id },
+  version,
+  location: {
+    $mid: 1,
+    path: extensionLink,
+    scheme: "file",
+  },
+  relativeLocation,
+}];
+
+fs.writeFileSync(
+  path.join(extDir, "extensions.json"),
+  JSON.stringify(registry),
+  "utf8",
+);
+
+// This directory is dedicated to CodeMe's development extension. Clear stale
+// tombstones so the current version cannot be suppressed by an earlier launch.
+fs.writeFileSync(path.join(extDir, ".obsolete"), "{}", "utf8");
+NODE
+
 ui_generation="current-v23"
 repo_revision=$(git -C "$root" rev-parse --short HEAD 2>/dev/null || printf "unknown")
 printf "CodeMe: launching UI %s · extension %s · repo %s\n" "$ui_generation" "$extension_version" "$repo_revision" >&2
