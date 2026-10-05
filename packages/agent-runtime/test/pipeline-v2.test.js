@@ -484,6 +484,7 @@ async function testRunWebsiteVerifierAutoChecksOwnedPreview() {
   const checks = run.toolCalls.filter((call) => call.name === "browser.check" && call.result && call.result.ok);
   assert.strictEqual(checks.length, 1);
   assert.strictEqual(checks[0].directedBy, "verification");
+  assert.strictEqual(checks[0].args.allowPresentationWarnings, true);
   assert.ok(run.verification.evidence.includes("browser.check"));
 }
 
