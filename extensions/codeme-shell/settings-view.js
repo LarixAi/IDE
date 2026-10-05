@@ -238,6 +238,25 @@ function renderPanel(id, state, values) {
   ].join("");
   if (id === "models") return '<div class="page-title"><div><h2>Models & Providers</h2><p>Discover model servers and see the model currently selected by CodeMe.</p></div></div>' + renderModels(state);
   if (id === "agents") return '<div class="page-title"><div><h2>Agents & Teams</h2><p>Paperclip team structure and future custom-agent management.</p></div></div>' + renderAgents(state);
+  if (id === "designer") {
+    const designer = state.openPencil || {};
+    const enabled = Boolean(values.design && values.design.openPencilEnabled === true);
+    const status = String(designer.status || (enabled ? "configured" : "disabled"));
+    const good = status === "connected" || status === "configured";
+    return [
+      '<div class="page-title"><div><h2>UI Designer</h2><p>Create and edit vector UI designs with OpenPencil before or alongside implementation.</p></div></div>',
+      '<div class="hero-card"><span class="eyebrow">Design engine</span><h3>OpenPencil</h3><p>CodeMe exposes one compact <code>design.openpencil</code> tool to the model while OpenPencil provides the full local design canvas and MCP toolset underneath.</p></div>',
+      '<div class="card"><h3>OpenPencil integration</h3>',
+      toggle("design.openPencilEnabled", "Enable OpenPencil UI Designer", enabled, "Let CodeMe use the local OpenPencil MCP adapter for UI and vector design."),
+      '<div class="info-row"><span>Status</span><span class="badge ' + (good ? "ok" : "") + '">' + escapeHtml(status) + '</span></div>',
+      '<div class="info-row"><span>MCP command</span><code>' + escapeHtml(designer.command || "openpencil-mcp") + '</code></div>',
+      '<div class="info-row"><span>MCP package</span><code>' + escapeHtml(designer.packageSpec || "@open-pencil/mcp@0.15.1") + '</code></div>',
+      '<div class="info-row"><span>Vendored source</span><code>' + escapeHtml(designer.source || "vendor/open-pencil") + '</code></div>',
+      '<p class="muted">' + escapeHtml(designer.detail || "OpenPencil will be probed when CodeMe needs the UI Designer.") + '</p>',
+      '</div>',
+      '<div class="notice"><strong>Local setup:</strong> install the OpenPencil desktop app, install <code>@open-pencil/mcp@0.15.1</code>, then run OpenPencil with a document open. CodeMe keeps the model-facing surface small while OpenPencil handles the editable vector canvas locally.</div>',
+    ].join("");
+  }
   if (id === "paperclip") return '<div class="page-title"><div><h2>Paperclip</h2><p>Control-plane health, bridge state and team orchestration.</p></div></div>' + renderPaperclip(state);
   if (id === "n8n") return '<div class="page-title"><div><h2>n8n & Automation</h2><p>Prompt enhancement, research and MCP capability access.</p></div></div>' + renderN8n(state);
   if (id === "mcp") {
@@ -364,6 +383,7 @@ function renderSettings(state, nonce) {
     ["appearance", "Appearance", "GENERAL"],
     ["models", "Models & Providers", "AI"],
     ["agents", "Agents & Teams", "AI"],
+    ["designer", "UI Designer", "AI"],
     ["paperclip", "Paperclip", "SERVICES"],
     ["n8n", "n8n & Automation", "SERVICES"],
     ["mcp", "Capabilities & MCP", "SERVICES"],
