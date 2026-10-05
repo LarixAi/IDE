@@ -77,14 +77,6 @@ class DebugToolProvider extends ControlledToolProvider {
   }
 
   async call(name, args) {
-    if (!this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)) {
-      return callLogicalBrowserTool(
-        { host: this.host, browserHarness: this.browserHarness },
-        name,
-        args || {},
-      );
-    }
-
     if (MUTATION_TOOLS.has(name) && !this.failureObserved) {
       return {
         ok: false,
@@ -111,7 +103,13 @@ class DebugToolProvider extends ControlledToolProvider {
       };
     }
 
-    const result = await super.call(name, args);
+    const result = !this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)
+      ? await callLogicalBrowserTool(
+        { host: this.host, browserHarness: this.browserHarness },
+        name,
+        args || {},
+      )
+      : await super.call(name, args);
 
     if (!this.failureObserved && isFailureEvidence(name, result)) {
       this.failureObserved = true;
