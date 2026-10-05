@@ -2,6 +2,7 @@
 
 const { ControlledToolProvider } = require("../../packages/agent-runtime/tool-registry");
 
+const LEGACY_BROWSER_TOOLS = new Set(["browser.check", "browser.interact"]);
 const VERIFICATION_BLOCKED_TOOLS = new Set([
   "file.write",
   "file.patch",
@@ -10,11 +11,29 @@ const VERIFICATION_BLOCKED_TOOLS = new Set([
 ]);
 
 class VerificationToolProvider extends ControlledToolProvider {
+  constructor(host, options = {}) {
+    super(host);
+    this.legacyBrowserEnabled = options.legacyBrowserEnabled !== false;
+  }
+
   definitions() {
-    return super.definitions().filter((tool) => !VERIFICATION_BLOCKED_TOOLS.has(tool.name));
+    return super.definitions().filter(
+      (tool) => !VERIFICATION_BLOCKED_TOOLS.has(tool.name)
+        && (this.legacyBrowserEnabled || !LEGACY_BROWSER_TOOLS.has(tool && tool.name)),
+    );
   }
 
   async call(name, args) {
+    if (!this.legacyBrowserEnabled && LEGACY_BROWSER_TOOLS.has(name)) {
+      return {
+        ok: false,
+        tool: name,
+        error: {
+          code: "legacy_browser_disabled",
+          message: "The legacy CodeMe browser runner is disabled while Browser Harness is under migration testing.",
+        },
+      };
+    }
     if (VERIFICATION_BLOCKED_TOOLS.has(name)) {
       return {
         ok: false,
