@@ -1,50 +1,57 @@
 # Experimental loop-testing integration
 
-This branch integrates the ideas from [sdsrss/loop-testing](https://github.com/sdsrss/loop-testing)
-without replacing CodeMe's canonical OpenHands-style agent loop.
+This branch tests the self-healing QA pattern from
+[sdsrss/loop-testing](https://github.com/sdsrss/loop-testing) without replacing
+or editing CodeMe's locked canonical OpenHands-style agent loop.
 
 Pinned reference implementation:
 
 - repository: `sdsrss/loop-testing`
-- commit: `4bc983cc714a9b659fae0b18e0ebc315da36d110`
+- pinned commit: `4bc983cc714a9b659fae0b18e0ebc315da36d110`
 - release at that commit: v0.17.3
 - license: MIT
 - submodule path: `vendor/loop-testing`
 
-## Why it is isolated
+## Integration point
 
-`loop-testing` is designed as a Claude Code / Codex skill with its own outer drivers.
-Running that driver directly inside CodeMe would create a second autonomous agent loop that
-could compete with CodeMe for the same files.
+The canonical pipeline stays locked.
 
-Instead, the submodule is kept as the reference implementation and CodeMe gets a native
-experimental post-mutation supervisor that uses the tools it already owns.
+CodeMe already routes controlled coding tools through
+`extensions/codeme-shell/codeme-tool-provider.js`. This experiment extends that
+provider only.
 
-## Enable it
-
-On this branch only, set:
-
-```bash
-CODEME_EXPERIMENTAL_SELF_TEST=true
-```
-
-Then launch CodeMe normally. A normal Code-mode prompt uses the existing CodeMe loop. After
-each successful workspace mutation, the harness automatically runs the fast checks that are
-available:
+With `CODEME_EXPERIMENTAL_SELF_TEST=true`, successful `file.write` and
+`file.patch` calls immediately run:
 
 1. `diagnostics.run`
-2. `tests.run { command: "npm test" }` when the inspected project exposes an npm test script
+2. `tests.run { command: "npm test" }` when `workspace.inspect` reports an npm test script
 
-The mutation tool result receives a `data.selfTest` summary. If a check fails, that failure is
-visible to the model in the same run, and the system instructions require the model to repair
-the root cause before it can claim completion. The normal end-of-run verifier still runs after
-that, so this adds an early regression signal rather than replacing completion verification.
+The fast-check result is attached to the original mutation observation as
+`data.selfTest`. The file mutation remains successful and therefore remains visible to
+CodeMe's normal change tracking. When the checks fail, `data.selfTest.requiresRepair`
+is true and the controlled tool contract tells the model to repair before claiming
+completion.
+
+The normal end-of-run verifier remains unchanged and still performs the canonical
+completion gate.
+
+## Enable for local testing
+
+On this experimental branch:
+
+```bash
+export CODEME_EXPERIMENTAL_SELF_TEST=true
+```
+
+Then launch CodeMe normally and use Code mode. No special prompt is required.
 
 ## Safety
 
 - `main` is unchanged.
-- The feature is off unless `CODEME_EXPERIMENTAL_SELF_TEST=true`.
-- There is still only one canonical CodeMe agent loop.
-- The vendored project is pinned instead of floating at its latest commit.
-- Browser/API acceptance checks remain in CodeMe's normal verifier for now; the first experiment
-  deliberately keeps the post-edit loop fast.
+- The feature is off by default.
+- No protected pipeline file is changed.
+- There is still one canonical CodeMe agent loop.
+- `loop-testing` is pinned as a reference implementation; its own Claude/Codex outer
+  drivers are not launched inside CodeMe.
+- Browser/API acceptance checks remain in CodeMe's normal verifier for this first
+  experiment so the post-edit checks stay fast.

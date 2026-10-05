@@ -13,7 +13,6 @@ const PIPELINE_SYSTEM_INSTRUCTIONS = [
   "After editing, use the available tests, diagnostics, process, browser, and Git tools that are relevant to the change.",
   "When the task is finished, reply without a tool call. The harness will verify the result and send any failed checks back to you for repair.",
   "If a tool returns an error, use that exact observation to change your next action. Do not repeat the same failed call unchanged.",
-  "When a successful mutation returns data.selfTest with ok=false, treat that as an immediate regression signal: inspect the named failed checks, repair the root cause, and do not claim completion until later checks pass.",
   "All paths are workspace-relative. Do not invent successful tool results, ports, URLs, files, commands, or external evidence.",
   CODE_PROMPT_PROTOCOL,
 ].join("\n");
