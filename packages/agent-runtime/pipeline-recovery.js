@@ -38,11 +38,22 @@ function summarizeToolMessage(message) {
     + head.replace(/^(OK|ERROR)\s*:?\s*/i, "").slice(0, 180);
 }
 
+function stripAvailableTools(content) {
+  return String(content || "")
+    .replace(/\n\n## Available tools\n[\s\S]*$/i, "")
+    .trim();
+}
+
 function compactMessages(messages, options = {}) {
-  const source = (messages || []).map((message) => ({ ...message }));
-  const keepRecent = Math.max(4, Number(options.keepRecent || 8));
-  const maxToolChars = Math.max(600, Number(options.maxToolChars || 1400));
-  const beforeChars = messageChars(source);
+  const rawSource = (messages || []).map((message) => ({ ...message }));
+  const beforeChars = messageChars(rawSource);
+  const source = rawSource.map((message) => (
+    message && message.role === "system"
+      ? { ...message, content: stripAvailableTools(message.content) }
+      : message
+  ));
+  const keepRecent = Math.max(4, Number(options.keepRecent || 6));
+  const maxToolChars = Math.max(500, Number(options.maxToolChars || 900));
   const touched = collectFiles(source);
   const originalGoalIndex = source.findIndex((message) => message && message.role === "user");
   const recentFrom = Math.max(originalGoalIndex + 1, source.length - keepRecent);
@@ -56,9 +67,11 @@ function compactMessages(messages, options = {}) {
 
   let summarized = 0;
   const compacted = source.map((message, index) => {
-    if (index <= originalGoalIndex || index >= recentFrom || index === lastVerificationIndex) return message;
     const content = String(message && message.content || "");
+    const preserve = index <= originalGoalIndex || index === lastVerificationIndex;
 
+    // Tool payloads are evidence, not durable prose. Even recent oversized tool
+    // output must shrink after a timeout or the retry is effectively identical.
     if (message && message.role === "tool" && content.length > maxToolChars) {
       summarized += 1;
       return { ...message, content: summarizeToolMessage(message) };
@@ -84,6 +97,8 @@ function compactMessages(messages, options = {}) {
         toolCalls,
       };
     }
+
+    if (preserve || index >= recentFrom) return message;
 
     if (content.length > maxToolChars * 3) {
       summarized += 1;
@@ -137,6 +152,7 @@ function checkpointState(input = {}) {
 
 module.exports = {
   DEFAULT_RECONNECT_DELAYS_MS,
+  stripAvailableTools,
   compactMessages,
   collectFiles,
   isTimeoutError,

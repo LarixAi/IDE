@@ -22,7 +22,7 @@ async function main() {
 
   const big = "x".repeat(18000);
   const compacted = compactMessages([
-    { role: "system", content: "SYSTEM" },
+    { role: "system", content: "SYSTEM\n\n## Available tools\n- file.read: read\n- file.write: write\n- capability.invoke: external" },
     { role: "user", content: "Fix login" },
     { role: "assistant", content: "", toolCalls: [{ name: "file.read", args: { path: "src/auth.js" } }] },
     { role: "tool", name: "file.read", content: "OK: " + big },
@@ -33,6 +33,7 @@ async function main() {
   ], { keepRecent: 4 });
 
   assert.ok(compacted.afterChars < compacted.beforeChars);
+  assert.ok(!compacted.messages.some((message) => /## Available tools/.test(String(message.content || ""))));
   assert.deepStrictEqual(compacted.filesChanged, ["src/auth.js"]);
   assert.ok(compacted.messages.some((message) => /VERIFICATION FAILED/.test(String(message.content || ""))));
   assert.match(compacted.messages[compacted.messages.length - 1].content, /MODEL TIMEOUT RECOVERY TURN/);

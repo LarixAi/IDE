@@ -228,7 +228,12 @@ class ToolCallCompatProvider {
       reply = await this.provider.complete(input);
     } catch (error) {
       if (!isRetryableToolProtocolError(error)) throw error;
-      reply = await this.provider.complete(recoveryInput(input));
+      const wrapped = new Error(
+        "Model tool-call protocol error: " + String(error && error.message || error),
+      );
+      wrapped.code = "tool_protocol_error";
+      wrapped.cause = error;
+      throw wrapped;
     }
     if (reply && Array.isArray(reply.toolCalls) && reply.toolCalls.length) return reply;
     const recovered = recoverLooseToolCalls(reply && reply.text, input && input.tools);

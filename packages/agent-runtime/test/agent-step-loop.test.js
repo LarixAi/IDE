@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const { runPipeline } = require("../pipeline-loop");
 const { condenseMessages } = require("../context-condenser");
 const { analyzeAction, requiresConfirmation } = require("../security-analyzer");
-const { prepareAgentStep } = require("../agent-step");
+const { prepareAgentStep, selectToolsForTask } = require("../agent-step");
 
 async function main() {
   const longMessages = [
@@ -35,6 +35,25 @@ async function main() {
   });
   assert.ok(prepared.events.some((event) => event.type === "condensation"));
   assert.ok(prepared.events.some((event) => event.type === "context_engineering"));
+
+  const broadTools = [
+    "workspace.inspect", "dir.list", "file.read", "file.patch", "file.write",
+    "repo.search", "git.status", "git.diff", "diagnostics.run",
+    "terminal.run", "sandbox.run", "tests.run",
+    "process.start", "process.status", "process.logs", "browser.check", "browser.interact",
+    "memory.recall", "memory.save", "skill.run", "capability.list", "capability.invoke",
+    "research.engineer", "design.openpencil", "browser.harness", "codeme.capabilities",
+  ].map((name) => ({ name, description: name, parameters: { type: "object", properties: {} } }));
+  const cssTools = selectToolsForTask(broadTools, [{ role: "user", content: "Fix the website CSS." }]);
+  const cssNames = new Set(cssTools.map((tool) => tool.name));
+  assert.ok(cssTools.length < broadTools.length, "CSS work should not receive the entire tool catalogue");
+  assert.ok(cssNames.has("file.patch"));
+  assert.ok(cssNames.has("browser.check"));
+  assert.ok(!cssNames.has("design.openpencil"));
+  assert.ok(!cssNames.has("capability.invoke"));
+
+  const designTools = selectToolsForTask(broadTools, [{ role: "user", content: "Use OpenPencil to design a dashboard mockup." }]);
+  assert.ok(designTools.some((tool) => tool.name === "design.openpencil"));
 
   const destructive = analyzeAction({
     id: "call_1",

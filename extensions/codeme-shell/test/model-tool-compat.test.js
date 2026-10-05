@@ -54,38 +54,22 @@ assert.strictEqual(
   assert.strictEqual(reply.text, "");
 
   let attempts = 0;
-  let recoveryMessages = [];
   const parserDriftBase = {
     name: "fixture",
-    async complete(input) {
+    async complete() {
       attempts += 1;
-      recoveryMessages = input.messages || [];
-      if (attempts === 1) {
-        throw new Error('model request returned 500: {"error":"expected element type \\u003cfunction\\u003e but have \\u003cparameter\\u003e"}');
-      }
-      return {
-        text: "",
-        toolCalls: [{ name: "file.read", args: { path: "pages/Home.js" } }],
-      };
+      throw new Error('model request returned 500: {"error":"expected element type \\u003cfunction\\u003e but have \\u003cparameter\\u003e"}');
     },
   };
   const parserDriftProvider = new ToolCallCompatProvider(parserDriftBase);
-  const recoveredReply = await parserDriftProvider.complete({
-    tools,
-    messages: [{ role: "user", content: "Read the page" }],
-  });
-  assert.strictEqual(attempts, 2, "known Qwen/Ollama tool parser drift should retry exactly once");
-  assert.deepStrictEqual(
-    recoveredReply.toolCalls,
-    [{ name: "file.read", args: { path: "pages/Home.js" } }],
+  await assert.rejects(
+    () => parserDriftProvider.complete({
+      tools,
+      messages: [{ role: "user", content: "Read the page" }],
+    }),
+    (error) => error && error.code === "tool_protocol_error",
   );
-  assert.ok(
-    recoveryMessages.some((message) => (
-      message.role === "system"
-      && /function wrapper before any parameter/i.test(message.content || "")
-    )),
-    "retry must include a narrow tool-protocol recovery reminder",
-  );
+  assert.strictEqual(attempts, 1, "tool protocol compatibility must never hide a second model call");
 
   let unrelatedAttempts = 0;
   const unrelatedBase = {

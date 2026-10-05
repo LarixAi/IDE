@@ -1,5 +1,7 @@
 "use strict";
 
+const { selectToolsForTask } = require("../../packages/agent-runtime/agent-step");
+
 const RESPONSE_POLICY = [
   "CodeMe response style:",
   "- Answer the user's actual question first. Put the conclusion before background.",
@@ -154,10 +156,7 @@ function offeredNames(input) {
   return new Set((Array.isArray(input && input.tools) ? input.tools : []).map((tool) => String(tool && tool.name || "")));
 }
 
-function needsActionRetry(input, reply) {
-  const calls = Array.isArray(reply && reply.toolCalls) ? reply.toolCalls : [];
-  if (calls.length) return false;
-
+function needsActionPolicy(input) {
   const messages = Array.isArray(input && input.messages) ? input.messages : [];
   const offered = offeredNames(input);
   if (!offered.size) return false;
@@ -171,6 +170,31 @@ function needsActionRetry(input, reply) {
   return Boolean(originalEditRequest(messages));
 }
 
+function needsActionRetry(input, reply) {
+  const calls = Array.isArray(reply && reply.toolCalls) ? reply.toolCalls : [];
+  return calls.length === 0 && needsActionPolicy(input);
+}
+
+function availableToolsText(tools) {
+  return (Array.isArray(tools) ? tools : [])
+    .map((tool) => "- " + String(tool && tool.name || "") + ": " + String(tool && tool.description || "").split("\n")[0])
+    .filter((line) => line !== "- : ")
+    .join("\n");
+}
+
+function rewriteAvailableTools(messages, tools) {
+  const replacement = "## Available tools\n" + availableToolsText(tools);
+  return (Array.isArray(messages) ? messages : []).map((message) => {
+    if (!message || message.role !== "system") return message;
+    const content = String(message.content || "");
+    if (!/## Available tools\n/i.test(content)) return message;
+    return {
+      ...message,
+      content: content.replace(/## Available tools\n[\s\S]*$/i, replacement),
+    };
+  });
+}
+
 class ResponsePolicyProvider {
   constructor(provider) {
     this.provider = provider;
@@ -182,40 +206,20 @@ class ResponsePolicyProvider {
   }
 
   async complete(input) {
-    const messages = Array.isArray(input && input.messages)
+    let messages = Array.isArray(input && input.messages)
       ? input.messages.map((message) => ({ ...message }))
       : [];
+    const tools = selectToolsForTask(input && input.tools, messages);
+    messages = rewriteAvailableTools(messages, tools);
     messages.push({ role: "system", content: RESPONSE_POLICY });
 
-    let reply = await this.provider.complete({ ...input, messages });
-
-    if (needsActionRetry({ ...input, messages }, reply)) {
-      const retryMessages = messages.concat([{ role: "system", content: ACTION_REQUIRED_POLICY }]);
-      try {
-        const retried = await this.provider.complete({ ...input, messages: retryMessages });
-        if (retried && (String(retried.text || "").trim() || (Array.isArray(retried.toolCalls) && retried.toolCalls.length))) {
-          reply = retried;
-        }
-      } catch {
-        // Keep the first successful model response; deterministic verification remains authoritative.
-      }
+    // Keep action guidance inside the same visible model turn. If the model
+    // still answers with prose, the canonical verifier owns the next repair turn.
+    if (needsActionPolicy({ ...input, messages, tools })) {
+      messages.push({ role: "system", content: ACTION_REQUIRED_POLICY });
     }
 
-    const toolCalls = Array.isArray(reply && reply.toolCalls) ? reply.toolCalls : [];
-    const firstText = String(reply && reply.text || "");
-
-    if (!toolCalls.length && looksCorruptedAssistantText(firstText)) {
-      const retryMessages = messages.concat([{ role: "system", content: REPAIR_POLICY }]);
-      try {
-        const retried = await this.provider.complete({ ...input, messages: retryMessages });
-        if (retried && (String(retried.text || "").trim() || (Array.isArray(retried.toolCalls) && retried.toolCalls.length))) {
-          reply = retried;
-        }
-      } catch {
-        // Keep the first successful model response and normalize it below.
-      }
-    }
-
+    const reply = await this.provider.complete({ ...input, messages, tools });
     if (!reply || typeof reply !== "object") return reply;
     return {
       ...reply,
@@ -237,7 +241,9 @@ module.exports = {
   hasRepeatedPhrase,
   looksCorruptedAssistantText,
   normalizeAssistantText,
+  needsActionPolicy,
   needsActionRetry,
+  rewriteAvailableTools,
   hasSuccessfulMutation,
   wrapResponsePolicy,
 };

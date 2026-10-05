@@ -53,11 +53,7 @@ const {
     name: "fixture",
     async complete() {
       attempts += 1;
-      if (attempts === 1) return { text: malformed, toolCalls: [] };
-      return {
-        text: "No — the named Software Architect role is not verified as installed.",
-        toolCalls: [],
-      };
+      return { text: malformed, toolCalls: [] };
     },
   };
   const repaired = await new ResponsePolicyProvider(repairBase).complete({
@@ -65,11 +61,8 @@ const {
     messages: [{ role: "user", content: "Is the Software Architect installed?" }],
     tools: [{ name: "codeme.capabilities", parameters: { type: "object", properties: {} } }],
   });
-  assert.strictEqual(attempts, 2, "garbled prose should be regenerated once");
-  assert.strictEqual(
-    repaired.text,
-    "No — the named Software Architect role is not verified as installed.",
-  );
+  assert.strictEqual(attempts, 1, "response policy must never hide a second model call");
+  assert.ok(!/&#(?:x[0-9a-f]+|[0-9]+);|&nbsp;/i.test(repaired.text));
 
   let toolAttempts = 0;
   const toolBase = {
@@ -92,19 +85,15 @@ const {
   assert.strictEqual(toolReply.toolCalls.length, 1);
 
   let editAttempts = 0;
-  let editRetryMessages = [];
+  let editMessages = [];
+  let editTools = [];
   const editBase = {
     name: "fixture",
     async complete(input) {
       editAttempts += 1;
-      editRetryMessages = input.messages || [];
-      if (editAttempts === 1) {
-        return { text: "Done — I updated the website.", toolCalls: [] };
-      }
-      return {
-        text: "",
-        toolCalls: [{ name: "file.read", args: { path: "public/index.html" } }],
-      };
+      editMessages = input.messages || [];
+      editTools = input.tools || [];
+      return { text: "Done — I updated the website.", toolCalls: [] };
     },
   };
   const editReply = await new ResponsePolicyProvider(editBase).complete({
@@ -116,29 +105,25 @@ const {
       { name: "file.write", parameters: { type: "object", properties: {} } },
     ],
   });
-  assert.strictEqual(editAttempts, 2, "Code mode prose completion must be retried until the model takes an action");
-  assert.strictEqual(editReply.toolCalls.length, 1);
-  assert.strictEqual(editReply.toolCalls[0].name, "file.read");
+  assert.strictEqual(editAttempts, 1, "one visible turn must make one provider call");
+  assert.strictEqual(editReply.toolCalls.length, 0);
   assert.ok(
-    editRetryMessages.some((message) => (
+    editMessages.some((message) => (
       message.role === "system"
       && String(message.content || "").includes("ACTION REQUIRED")
     )),
   );
+  assert.ok(editTools.some((tool) => tool.name === "file.patch"));
   assert.ok(ACTION_REQUIRED_POLICY.includes("cannot finish with prose only"));
 
   let verificationAttempts = 0;
+  let verificationMessages = [];
   const verificationBase = {
     name: "fixture",
-    async complete() {
+    async complete(input) {
       verificationAttempts += 1;
-      if (verificationAttempts === 1) {
-        return { text: "I couldn't complete that.", toolCalls: [] };
-      }
-      return {
-        text: "",
-        toolCalls: [{ name: "browser.check", args: {} }],
-      };
+      verificationMessages = input.messages || [];
+      return { text: "I couldn't complete that.", toolCalls: [] };
     },
   };
   const verificationReply = await new ResponsePolicyProvider(verificationBase).complete({
@@ -154,8 +139,9 @@ const {
       { name: "browser.check", parameters: { type: "object", properties: {} } },
     ],
   });
-  assert.strictEqual(verificationAttempts, 2, "verification repair prose must be retried as an action turn");
-  assert.strictEqual(verificationReply.toolCalls[0].name, "browser.check");
+  assert.strictEqual(verificationAttempts, 1, "verification repair must not hide another model call");
+  assert.strictEqual(verificationReply.toolCalls.length, 0);
+  assert.ok(verificationMessages.some((message) => /ACTION REQUIRED/.test(String(message.content || ""))));
 
   console.log("ok model response policy, capability grounding, and garbled-text recovery");
 })().catch((error) => {
