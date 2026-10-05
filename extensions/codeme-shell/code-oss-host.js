@@ -312,6 +312,7 @@ async function browserCheck(url, input = {}) {
       action: "observe",
       selector: String(args.selector || "body"),
       expectedText: String(args.expectedText || ""),
+      allowPresentationWarnings: args.allowPresentationWarnings === true,
     });
     if (!observed || observed.available === false) {
       return {
