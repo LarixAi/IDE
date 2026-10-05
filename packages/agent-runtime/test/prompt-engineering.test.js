@@ -16,6 +16,8 @@ assert.match(CODE_PROMPT_PROTOCOL, /acceptance criteria/i);
 assert.match(CODE_PROMPT_PROTOCOL, /HTTP 200/i);
 assert.match(CODE_PROMPT_PROTOCOL, /blocked\/incomplete/i);
 assert.match(CODE_PROMPT_PROTOCOL, /exact observation/i);
+assert.match(CODE_PROMPT_PROTOCOL, /allowPresentationWarnings=true/i);
+assert.match(CODE_PROMPT_PROTOCOL, /run or open an existing website/i);
 assert.match(PLAN_PROMPT_PROTOCOL, /observable acceptance criteria/i);
 assert.match(ASK_PROMPT_PROTOCOL, /verified facts/i);
 
