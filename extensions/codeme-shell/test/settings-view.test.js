@@ -22,6 +22,16 @@ const state = {
     n8n: { status: "online", detail: "n8n MCP connected with 4 discovered tool(s)." },
     model: { status: "online", detail: "Local · Qwen 3.5 9B is ready." },
   },
+  openPencil: {
+    enabled: true,
+    connected: true,
+    status: "connected",
+    detail: "OpenPencil MCP is connected. CodeMe can inspect and edit the active design.",
+    command: "openpencil-mcp",
+    commandAvailable: true,
+    packageSpec: "@open-pencil/mcp@0.15.1",
+    source: "vendor/open-pencil",
+  },
   models: {
     selected: { label: "Local · Qwen 3.5 9B", id: "qwen3.5:9b" },
     sources: [{ id: "local", label: "Local", url: "http://127.0.0.1:11434", available: true, count: 1 }],
@@ -46,6 +56,7 @@ const state = {
     items: [
       { id: "skill:fix-terminal-error", name: "/fix-terminal-error", kind: "skill", status: "available", connected: true, description: "Repair terminal failures" },
       { id: "research-engineer", name: "Research Engineer", kind: "native", status: "connected", connected: true, description: "Native research" },
+      { id: "openpencil-ui-designer", name: "UI Designer · OpenPencil", kind: "native", status: "connected", connected: true, description: "Local vector UI design" },
       { id: "github", name: "GitHub", kind: "mcp", status: "connected", connected: true, enabled: true, toolCount: 2, description: "MCP server via http" },
       { id: "supabase", name: "Supabase", kind: "mcp", status: "disabled", connected: false, enabled: false, description: "MCP server via http" },
     ],
@@ -86,6 +97,10 @@ const html = renderSettings(state, "settings-nonce");
 assert.ok(html.includes("CodeMe Settings"));
 assert.ok(html.includes("Models &amp; Providers"));
 assert.ok(html.includes("Agents &amp; Teams"));
+assert.ok(html.includes("UI Designer"));
+assert.ok(html.includes("design.openpencil"));
+assert.ok(html.includes("@open-pencil/mcp@0.15.1"));
+assert.ok(html.includes("vendor/open-pencil"));
 assert.ok(html.includes("Paperclip"));
 assert.ok(html.includes("n8n &amp; Automation"));
 assert.ok(html.includes("Capabilities &amp; MCP"));

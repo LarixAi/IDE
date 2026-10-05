@@ -128,6 +128,21 @@ CODEME_GITHUB_TOKEN=
 
 n8n and Paperclip are not required for this path.
 
+## OpenPencil UI Designer
+
+CodeMe includes a compact `design.openpencil` adapter for the open-source OpenPencil vector design editor. The upstream project is pinned under `vendor/open-pencil`, while CodeMe talks to the running desktop app through the official `@open-pencil/mcp@0.15.1` stdio server.
+
+This keeps the 9B model-facing tool surface small while still allowing CodeMe to create editable UI designs, inspect page trees, set layout and styles, lint designs, analyze visual tokens, and export SVG.
+
+Local setup on macOS:
+
+```bash
+sh scripts/setup-openpencil.sh
+brew install --cask openpencil
+```
+
+Then start OpenPencil with a design document open and check **Settings → UI Designer**. See `docs/OPENPENCIL_UI_DESIGNER.md` for the full workflow and test prompt.
+
 ## In-IDE browser preview
 
 CodeMe browser verification stays inside the IDE. When the agent uses `browser.check` or `browser.interact`, the preview runner opens the verified localhost URL in Code - OSS's built-in Simple Browser editor using `simpleBrowser.show`. It does not call the operating system's external browser.

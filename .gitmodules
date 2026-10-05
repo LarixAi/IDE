@@ -12,3 +12,8 @@
 	path = vendor/learn-harness-engineering
 	url = https://github.com/walkinglabs/learn-harness-engineering.git
 	shallow = true
+
+[submodule "vendor/open-pencil"]
+	path = vendor/open-pencil
+	url = https://github.com/open-pencil/open-pencil.git
+	shallow = true

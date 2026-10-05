@@ -34,6 +34,9 @@ const DEFAULTS = Object.freeze({
   skills: {
     enabled: true,
   },
+  design: {
+    openPencilEnabled: true,
+  },
   browser: {
     browserHarnessEnabled: true,
     legacyBrowserEnabled: false,
