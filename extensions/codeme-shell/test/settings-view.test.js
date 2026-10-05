@@ -106,7 +106,7 @@ assert.ok(html.includes("GitHub"));
 assert.ok(html.includes("Workspace"));
 assert.ok(html.includes("Terminal"));
 assert.ok(html.includes("Browser &amp; Preview"));
-assert.ok(html.includes("Browser Harness candidate"));
+assert.ok(html.includes("Browser Harness migration test"));
 assert.ok(html.includes("Browser Harness"));
 assert.ok(html.includes("No — testing"));
 assert.ok(html.includes("Legacy browser tools"));
