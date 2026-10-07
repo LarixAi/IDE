@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const { spawn } = require("child_process");
 
-const CDP_WAIT_MS = 10000;
+const CDP_WAIT_MS = process.env.CI ? 20000 : 10000;
 const ACTION_WAIT_MS = 250;
 const HOLD_VISIBLE_MS = 2500;
 
